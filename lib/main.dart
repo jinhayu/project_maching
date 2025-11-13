@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // <--- 1. import 추가
-import 'pages/splash_page.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'pages/auth_gate_page.dart'; // <--- '인증 관문'을 import
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. .env 파일 로드 (Supabase 초기화 전에)
+  // .env 파일 로드
   await dotenv.load(fileName: ".env");
 
+  // Supabase 초기화 (URL/Key는 .env에서)
   await Supabase.initialize(
-    // 3. .env 파일에서 변수 이름으로 키 가져오기
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
@@ -22,9 +22,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      title: 'Supabase Flutter Demo',
-      home: SplashPage(),
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false, // 디버그 배너 숨기기
+      title: '프로젝트 매칭 시스템',
+      theme: ThemeData.dark(), // 다크 모드
+      home: const AuthGate(), // <--- 앱의 첫 화면을 'AuthGate'로 변경
     );
   }
 }

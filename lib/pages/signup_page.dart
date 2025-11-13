@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'signup_page.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+class SignupPage extends StatefulWidget {
+  const SignupPage({Key? key}) : super(key: key);
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<SignupPage> createState() => _SignupPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _SignupPageState extends State<SignupPage> {
   bool _loading = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -25,7 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('로그인'),
+        title: const Text('회원가입'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -54,7 +53,7 @@ class _LoginPageState extends State<LoginPage> {
                 final email = _emailController.text;
                 final password = _passwordController.text;
 
-                await Supabase.instance.client.auth.signInWithPassword(
+                await Supabase.instance.client.auth.signUp(
                   email: email,
                   password: password,
                 );
@@ -62,35 +61,27 @@ class _LoginPageState extends State<LoginPage> {
                 // 💥 Context 경고 해결: 비동기 갭 이후 mounted 체크 추가
                 if (!mounted) return;
 
-                Navigator.popUntil(context, (route) => route.isFirst);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text(
+                      '회원가입 성공! 이메일 인증을 확인하세요.'),
+                  backgroundColor: Colors.green,
+                ));
+                Navigator.pop(context);
 
               } catch (e) {
                 // 💥 Context 경고 해결: 비동기 갭 이후 mounted 체크 추가
                 if (!mounted) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('로그인 실패: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                setState(() {
-                  _loading = false;
-                });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('회원가입 실패: $e'),
+                  backgroundColor: Colors.red,
+                ));
               }
+              setState(() {
+                _loading = false;
+              });
             },
-            child: const Text('Login'),
-          ),
-          const SizedBox(height: 16),
-
-          TextButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SignupPage()),
-              );
-            },
-            child: const Text('아직 계정이 없으신가요? 회원가입'),
+            child: const Text('Signup'),
           ),
         ],
       ),
