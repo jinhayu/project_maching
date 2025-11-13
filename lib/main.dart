@@ -26,8 +26,25 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false, // 디버그 배너 숨기기
       title: '프로젝트 매칭 시스템',
-      theme: ThemeData.dark(), // 다크 모드
-      home: const AuthGate(), // <--- 앱의 첫 화면을 'AuthGate'로 변경
+
+      // 💡 FIX 1: 테마 모드를 Light로 고정
+      themeMode: ThemeMode.light,
+
+      // 💡 FIX 2: 기본 Light Theme 정의 (기존 darkTheme 제거)
+      theme: ThemeData(
+        brightness: Brightness.light,
+        primarySwatch: Colors.blue,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white, // AppBar 배경을 흰색으로 설정
+          foregroundColor: Colors.black,  // AppBar 아이콘/텍스트 색상을 검은색으로 설정
+          elevation: 1,
+        ),
+        scaffoldBackgroundColor: Colors.grey[50], // 연한 회색 배경
+      ),
+
+      // 참고: darkTheme 속성은 이제 무시됩니다.
+
+      home: const AuthGate(), // 앱의 첫 화면을 'AuthGate'로 유지
     );
   }
 }

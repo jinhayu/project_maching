@@ -14,6 +14,9 @@ dependencies:
   flutter_dotenv: ^6.0.0
   supabase_flutter: ^2.10.3
   table_calendar: ^3.2.0
+  flutter_local_notifications: ^17.0.0
+  timezone: ^0.9.3
+  gantt_chart: ^0.3.0
 
 dev_dependencies:
   flutter_test:

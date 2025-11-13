@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// 3단계, 4단계에서 생성할 페이지 (지금은 오류가 나는 것이 정상입니다)
+import 'splash_page.dart';
 import 'project_page.dart';
 import 'scheduler_page.dart';
 
@@ -15,22 +14,21 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   var _loading = true;
 
-  // DB 컬럼에 맞게 컨트롤러 추가
   final _fullNameController = TextEditingController();
   final _departmentController = TextEditingController();
-  final _skillsController = TextEditingController(); // (AI 매칭용)
+  final _skillsController = TextEditingController();
   final _usernameController = TextEditingController();
   final _websiteController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    // 💡 위젯 초기화 시 프로필 로드 시작
     _loadProfile();
   }
 
   @override
   void dispose() {
-    // 모든 컨트롤러를 dispose
     _fullNameController.dispose();
     _departmentController.dispose();
     _skillsController.dispose();
@@ -39,181 +37,241 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  // DB에서 프로필 정보를 불러오는 함수
+  /// DB에서 프로필 정보를 불러오는 함수 (무한 로딩 방지 구조)
   Future<void> _loadProfile() async {
-    final ScaffoldMessengerState scaffoldMessenger =
-    ScaffoldMessenger.of(context);
+    // 💡 로딩 시작
+    setState(() {
+      _loading = true;
+    });
+
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       final data = (await Supabase.instance.client
           .from('profiles')
           .select()
-          .eq('id', userId) // .match() 대신 .eq()를 권장합니다.
+          .eq('id', userId)
           .maybeSingle());
 
-      if (data != null) {
+      if (data != null && mounted) {
         setState(() {
-          // DB에서 불러온 데이터로 각 입력창의 기본값을 설정
           _fullNameController.text = data['full_name'] ?? '';
           _departmentController.text = data['department'] ?? '';
-
-          // 'skills' (text 배열)를 쉼표(,)로 구분된 하나의 문자열로 변환
           final skillsList = (data['skills'] as List<dynamic>?) ?? [];
           _skillsController.text = skillsList.join(', ');
-
           _usernameController.text = data['username'] ?? '';
           _websiteController.text = data['website'] ?? '';
         });
       }
-    } catch (e) {
-      scaffoldMessenger.showSnackBar(SnackBar(
-        content: Text('Error occurred while getting profile: $e'),
-        backgroundColor: Colors.red,
-      ));
+    } catch (error) {
+      // 💥 FIX: Context 경고 해결 및 오류 발생 시 메시지 표시
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('프로필 로딩 오류: $error'),
+            backgroundColor: Colors.red,
+          ));
+        });
+      }
+    } finally {
+      // 💥 FIX: finally 블록에서 반드시 로딩 상태 해제 (무한 로딩 방지)
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
-    setState(() {
-      _loading = false;
-    });
   }
 
-  // 프로필 정보를 DB에 저장(업데이트)하는 함수
+  /// 프로필 정보를 DB에 저장(업데이트)하는 함수
   Future<void> _updateProfile() async {
-    final ScaffoldMessengerState scaffoldMessenger =
-    ScaffoldMessenger.of(context);
-    try {
-      setState(() {
-        _loading = true;
-      });
-      final userId =
-          Supabase.instance.client.auth.currentUser!.id;
+    setState(() {
+      _loading = true;
+    });
 
-      // 'skills' 입력창의 문자열을 쉼표(,)로 분리하고 공백을 제거하여 배열로 변환
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+
       final skillsList = _skillsController.text
           .split(',')
           .map((s) => s.trim())
-          .where((s) => s.isNotEmpty) // 빈 문자열 제거
+          .where((s) => s.isNotEmpty)
           .toList();
 
       await Supabase.instance.client.from('profiles').upsert({
         'id': userId,
         'full_name': _fullNameController.text,
         'department': _departmentController.text,
-        'skills': skillsList, // <--- DB에는 배열(List)로 저장
+        'skills': skillsList,
         'username': _usernameController.text,
         'website': _websiteController.text,
         'updated_at': DateTime.now().toIso8601String(),
       });
+
       if (mounted) {
-        scaffoldMessenger.showSnackBar(const SnackBar(
-          content: Text('Saved profile'),
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('프로필이 성공적으로 저장되었습니다.'),
+          backgroundColor: Colors.green,
         ));
       }
-    } catch (e) {
-      scaffoldMessenger.showSnackBar(SnackBar(
-        content: Text('Error saving profile: $e'),
-        backgroundColor: Colors.red,
-      ));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('프로필 저장 오류: $error'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
-    setState(() {
-      _loading = false;
-    });
   }
 
+  /// 로그아웃 함수
+  Future<void> _signOut() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('로그아웃 실패: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const SplashPage()),
+            (route) => false,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // 💡 고정된 밝은 테마 색상 정의
+    const Color scaffoldBgColor = Colors.white;
+    const Color appBarColor = Colors.white;
+    const Color textColor = Colors.black;
+    final Color iconColor = Colors.grey.shade600;
+    final Color hintColor = Colors.grey.shade400;
+
     return Scaffold(
+      backgroundColor: scaffoldBgColor,
       appBar: AppBar(
-        title: const Text('프로필 수정'),
+        backgroundColor: appBarColor,
+        elevation: 0,
+        title: const Text('프로필 수정 (MVP)', style: TextStyle(color: textColor)),
         actions: [
-          // 로그아웃 버튼
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => Supabase.instance.client.auth.signOut(),
+            icon: Icon(Icons.logout, color: iconColor),
+            onPressed: _signOut,
+            tooltip: '로그아웃',
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: iconColor))
           : ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         children: [
-          // (제안서 ERD 기준) full_name
+          // 타이틀 텍스트
+          Text(
+            '${_usernameController.text.isNotEmpty ? _usernameController.text : '사용자'}님의 정보를 수정하세요.',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+          ),
+          const SizedBox(height: 24),
+
+          // --- Form Fields with Fixed Colors ---
           TextFormField(
             controller: _fullNameController,
-            decoration: const InputDecoration(
-              label: Text('이름 (Full Name)'),
+            style: const TextStyle(color: textColor),
+            decoration: InputDecoration(
+              label: const Text('이름 (Full Name)'),
+              labelStyle: TextStyle(color: hintColor),
             ),
           ),
           const SizedBox(height: 16),
 
-          // (제안서 ERD 기준) department
           TextFormField(
             controller: _departmentController,
-            decoration: const InputDecoration(
-              label: Text('학과 (Department)'),
+            style: const TextStyle(color: textColor),
+            decoration: InputDecoration(
+              label: const Text('학과 (Department)'),
+              labelStyle: TextStyle(color: hintColor),
             ),
           ),
           const SizedBox(height: 16),
 
-          // (AI 매칭용) skills
           TextFormField(
             controller: _skillsController,
-            decoration: const InputDecoration(
-              label: Text('보유 스킬 (Skills)'),
+            style: const TextStyle(color: textColor),
+            decoration: InputDecoration(
+              label: const Text('보유 스킬 (Skills)'),
               hintText: '쉼표(,)로 구분 (예: Python, Flutter, SQL)',
+              labelStyle: TextStyle(color: hintColor),
+              hintStyle: TextStyle(color: hintColor),
             ),
           ),
           const SizedBox(height: 16),
 
           TextFormField(
             controller: _usernameController,
-            decoration: const InputDecoration(
-              label: Text('유저명 (Username)'),
+            style: const TextStyle(color: textColor),
+            decoration: InputDecoration(
+              label: const Text('유저명 (Username)'),
+              labelStyle: TextStyle(color: hintColor),
             ),
           ),
           const SizedBox(height: 16),
 
           TextFormField(
             controller: _websiteController,
-            decoration: const InputDecoration(
-              label: Text('웹사이트 (Website)'),
+            style: const TextStyle(color: textColor),
+            decoration: InputDecoration(
+              label: const Text('웹사이트 (Website)'),
+              labelStyle: TextStyle(color: hintColor),
             ),
           ),
           const SizedBox(height: 24),
 
           // 'Save' 버튼
-          ElevatedButton(
-              onPressed: _updateProfile, // <--- 저장 함수 호출
-              child: const Text('프로필 저장')
-          ),
+          ElevatedButton.icon(
+              icon: const Icon(Icons.save),
+              onPressed: _updateProfile,
+              label: const Text('프로필 저장')),
 
-          const SizedBox(height: 16),
+          const Divider(height: 48),
 
-          // (3단계에서 생성할) '프로젝트' 페이지로 이동하는 버튼
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+          // --- Navigation Buttons (고정 Light Theme) ---
+          OutlinedButton(
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProjectPage()),
+                MaterialPageRoute(
+                  // 💥 isDarkMode 인수 제거 유지
+                    builder: (context) => const ProjectPage()),
               );
             },
-            child: const Text('프로젝트 목록 보기'),
+            child: const Text('프로젝트 매칭 페이지로 이동'),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // (4단계에서 생성할) '스케줄러' 페이지로 이동하는 버튼
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
+          OutlinedButton(
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const SchedulerPage()),
+                MaterialPageRoute(
+                    builder: (context) => const SchedulerPage()),
               );
             },
-            child: const Text('내 스케줄러 열기'),
+            child: const Text('스케줄/진행률 페이지로 이동'),
           ),
         ],
       ),

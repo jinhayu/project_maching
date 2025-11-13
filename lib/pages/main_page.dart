@@ -48,7 +48,7 @@ class _MainPageState extends State<MainPage> {
           _userName = '이름 로드 오류';
           _isLoading = false;
         });
-        // print 대신 debugPrint가 Material.dart에 포함되므로 import 제거
+        // print 대신 debugPrint 사용
         // debugPrint('Error fetching profile: $error');
       }
     }
@@ -61,11 +61,10 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  // 4. 네비게이션 함수들
+  // 4. 네비게이션 함수들 (고정된 대상 페이지 호출)
   void _navigateToProfile() {
     Navigator.push(
       context,
-      // 💥 isDarkMode 인수가 제거된 ProfilePage 호출
       MaterialPageRoute(builder: (context) => const ProfilePage()),
     );
   }
@@ -73,7 +72,6 @@ class _MainPageState extends State<MainPage> {
   void _navigateToScheduler() {
     Navigator.push(
       context,
-      // 💥 isDarkMode 인수가 제거된 SchedulerPage 호출
       MaterialPageRoute(builder: (context) => const SchedulerPage()),
     );
   }
@@ -101,10 +99,11 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 💥 5. 고정 색상 정의
     final Color iconColor = Colors.grey.shade600;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.grey[50], // 옅은 회색 배경 고정
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -132,7 +131,7 @@ class _MainPageState extends State<MainPage> {
                 ),
               ),
 
-              // 우측: 아이콘 및 버튼 그룹
+              // 우측: 아이콘 및 버튼 그룹 (고정 아이콘 색상)
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -186,7 +185,7 @@ class _MainPageState extends State<MainPage> {
         actions: const [],
       ),
 
-      // 3. 본문: 1:3:1 비율의 3단 카드 레이아웃
+      // 3. 본문: 좌우 여백을 가진 1:3:1 비율의 3단 카드 레이아웃
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 100.0),
@@ -201,7 +200,7 @@ class _MainPageState extends State<MainPage> {
               Expanded(
                 flex: 1,
                 child: Card(
-                  color: Colors.white,
+                  color: Colors.white, // 흰색 카드 고정
                   margin: const EdgeInsets.fromLTRB(8.0, 8.0, 4.0, 8.0),
                   elevation: 1.0,
                   shape: RoundedRectangleBorder(
@@ -256,35 +255,7 @@ class _MainPageState extends State<MainPage> {
                         ),
                       ),
 
-                      // '절반 크기'를 위한 이벤트 섹션
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 4.0),
-                        child: Text(
-                          '⚡️ 지금 참여가능한 이벤트 (MVP)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                      ),
-
-                      ListTile(
-                        dense: true,
-                        leading: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: Colors.red[100],
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(Icons.campaign, color: Colors.red, size: 20),
-                        ),
-                        title: const Text('프로덕트헌트 투표', style: TextStyle(fontSize: 13)),
-                        subtitle: const Text('내 프로젝트 등록', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                        onTap: () {},
-                      ),
-                      const SizedBox(height: 8.0),
+                      // '이벤트' 목록 제거 (최종 디자인)
                     ],
                   ),
                 ),
@@ -296,7 +267,7 @@ class _MainPageState extends State<MainPage> {
               Expanded(
                 flex: 3,
                 child: Card(
-                  color: Colors.deepPurple[50],
+                  color: Colors.deepPurple[50], // 연한 보라색 카드 고정
                   margin: const EdgeInsets.fromLTRB(4.0, 8.0, 4.0, 8.0),
                   elevation: 1.0,
                   shape: RoundedRectangleBorder(
@@ -321,56 +292,12 @@ class _MainPageState extends State<MainPage> {
                   ),
                   clipBehavior: Clip.antiAlias,
 
-                  // 높이 2배를 위한 더미 콘텐츠 추가
-                  child: ListView(
-                    padding: const EdgeInsets.all(0),
-                    shrinkWrap: true,
-                    children: [
-                      // 섹션 1
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-                        child: Text(
-                          '우측 상단 서비스 (Placeholder)',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800]),
-                        ),
-                      ),
-                      ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.star)),
-                        title: const Text('인기 서비스 1'),
-                        subtitle: const Text('더미 데이터 1'),
-                        onTap: () {},
-                      ),
-                      ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.lightbulb)),
-                        title: const Text('프로젝트 1'),
-                        subtitle: const Text('더미 데이터 2'),
-                        onTap: () {},
-                      ),
-                      const Divider(),
-
-                      // 섹션 2
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-                        child: Text(
-                          '우측 하단 광고/이벤트 (Placeholder)',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800]),
-                        ),
-                      ),
-                      Container(
-                        height: 60,
-                        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          '광고 배너 Placeholder',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                      const SizedBox(height: 16.0),
-                    ],
+                  // 빈 카드를 위한 더미 콘텐츠 (최종)
+                  child: Center(
+                    child: Text(
+                      '우측 사이드바 (비어 있음)',
+                      style: TextStyle(color: Colors.grey[400]),
+                    ),
                   ),
                 ),
               ),

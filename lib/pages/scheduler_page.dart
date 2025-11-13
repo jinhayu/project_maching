@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart' as fln;
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'team_scheduler_page.dart';
 
+// --- 개인 일정 모델 ---
 class Event {
   final String id;
   final String title;
   final DateTime date;
   final bool isCompleted;
-  final String projectId;
 
   Event({
     required this.id,
     required this.title,
     required this.date,
     required this.isCompleted,
-    required this.projectId,
   });
 }
 
@@ -29,64 +31,45 @@ class _SchedulerPageState extends State<SchedulerPage> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.month;
+  bool _isTeamView = false;
 
-  bool _isLoading = true;
-  late final SupabaseClient _client;
+  final GlobalKey<TeamSchedulerPageState> _teamSchedulerKey = GlobalKey();
 
   Map<DateTime, List<Event>> _eventsMap = {};
+  final fln.FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  fln.FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
-    _client = Supabase.instance.client;
-    _loadEvents();
+    _selectedDay = DateTime.utc(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+    _initDummyEvents();
+    _configureLocalNotifications();
   }
 
-  Future<void> _loadEvents() async {
-    setState(() {
-      _isLoading = true;
-    });
+  void _configureLocalNotifications() {
+    tz.initializeTimeZones();
     try {
-      final userId = _client.auth.currentUser!.id;
-      final response = await _client
-          .from('personal_events')
-          .select('id, title, date, status, project_id')
-          .eq('user_id', userId);
-
-      final Map<DateTime, List<Event>> tempMap = {};
-
-      for (var data in response) {
-        final eventDate = DateTime.parse(data['date']).toUtc();
-        final dateKey = DateTime.utc(eventDate.year, eventDate.month, eventDate.day);
-
-        final event = Event(
-          id: data['id'].toString(),
-          title: data['title'] as String,
-          date: dateKey,
-          isCompleted: data['status'] == 'completed',
-          projectId: data['project_id'] as String,
-        );
-
-        if (tempMap[dateKey] == null) {
-          tempMap[dateKey] = [];
-        }
-        tempMap[dateKey]!.add(event);
-      }
-
-      if (mounted) {
-        setState(() {
-          _eventsMap = tempMap;
-        });
-      }
-    } catch (e) {
-      _showErrorSnackBar('일정 로드 실패: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+    } catch (_) {
+      tz.setLocalLocation(tz.local);
     }
+
+    const androidSettings = fln.AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = fln.InitializationSettings(android: androidSettings);
+
+    flutterLocalNotificationsPlugin.initialize(initSettings);
+  }
+
+  void _initDummyEvents() {
+    final today = DateTime.now();
+    final todayKey = DateTime.utc(today.year, today.month, today.day);
+
+    _eventsMap = {
+      todayKey: [
+        Event(id: '1', title: '회의', date: todayKey, isCompleted: false)
+      ]
+    };
   }
 
   List<Event> _getEventsForDay(DateTime day) {
@@ -94,70 +77,76 @@ class _SchedulerPageState extends State<SchedulerPage> {
     return _eventsMap[dateKey] ?? [];
   }
 
-  Future<void> _toggleEventStatus(Event event) async {
-    final newStatus = event.isCompleted ? 'pending' : 'completed';
+  Future<void> _scheduleNotification(Event event) async {
+    final scheduledDate = tz.TZDateTime(
+      tz.local,
+      event.date.year,
+      event.date.month,
+      event.date.day,
+      9, // 오전 9시로 예약
+      0,
+      0,
+    );
 
-    try {
-      await _client
-          .from('personal_events')
-          .update({'status': newStatus})
-          .eq('id', event.id);
+    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) return;
 
-      if (!mounted) return; // 💥 Context 경고 해결
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      event.id.hashCode,
+      '오늘 일정: ${event.date.month}월 ${event.date.day}일',
+      event.title,
+      scheduledDate,
 
-      await _loadEvents();
-
-      // SnackBar 호출 직전 mounted 체크
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('일정 상태가 변경되었습니다.'))
-      );
-
-    } catch (e) {
-      _showErrorSnackBar('상태 변경 실패: $e');
-    }
+      const fln.NotificationDetails(
+        android: fln.AndroidNotificationDetails(
+          'personal_events_channel',
+          '개인 일정',
+          channelDescription: '개인 일정 알림',
+          importance: fln.Importance.max,
+          priority: fln.Priority.high,
+        ),
+      ),
+      androidScheduleMode: fln.AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: fln.UILocalNotificationDateInterpretation.absoluteTime,
+    );
   }
 
   void _showAddEventDialog() {
     final titleController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) {
+        final localSelectedDate = _selectedDay.toLocal().toString().split(' ')[0];
+
         return AlertDialog(
-          title: Text('새 일정 추가 (${_selectedDay.toLocal().toString().split(' ')[0]})'),
+          title: Text('새 일정 추가 ($localSelectedDate)'),
           content: TextField(
             controller: titleController,
-            decoration: const InputDecoration(hintText: '일정 내용'),
+            decoration: const InputDecoration(hintText: '일정 제목'),
           ),
           actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () async {
+              onPressed: () {
                 if (titleController.text.isEmpty) return;
 
-                try {
-                  final userId = _client.auth.currentUser!.id;
-                  final eventDate = _selectedDay.toUtc().toIso8601String();
+                final dateKey = DateTime.utc(_selectedDay.year, _selectedDay.month, _selectedDay.day);
 
-                  await _client.from('personal_events').insert({
-                    'user_id': userId,
-                    'project_id': 'default-project-id',
-                    'title': titleController.text,
-                    'date': eventDate,
-                    'status': 'pending',
-                  });
+                final newEvent = Event(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  title: titleController.text,
+                  date: dateKey,
+                  isCompleted: false,
+                );
 
-                  if (!mounted) return; // 💥 Context 경고 해결
+                setState(() {
+                  _eventsMap[dateKey] ??= [];
+                  _eventsMap[dateKey]!.add(newEvent);
+                });
 
-                  await _loadEvents();
-                  Navigator.pop(context);
-                } catch (e) {
-                  _showErrorSnackBar('일정 추가 실패: $e');
-                }
+                // 비동기 알림 예약
+                _scheduleNotification(newEvent);
+
+                Navigator.pop(context);
               },
               child: const Text('추가'),
             ),
@@ -167,171 +156,118 @@ class _SchedulerPageState extends State<SchedulerPage> {
     );
   }
 
-
-  void _showErrorSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ));
+  void _toggleEventCompletion(DateTime dateKey, Event event) {
+    final key = DateTime.utc(dateKey.year, dateKey.month, dateKey.day);
+    if (_eventsMap.containsKey(key)) {
+      final index = _eventsMap[key]!.indexWhere((e) => e.id == event.id);
+      if (index != -1) {
+        setState(() {
+          _eventsMap[key]![index] = Event(
+            id: event.id,
+            title: event.title,
+            date: event.date,
+            isCompleted: !event.isCompleted,
+          );
+        });
+      }
     }
+  }
+
+  void _deleteEvent(DateTime dateKey, Event event) {
+    setState(() {
+      final key = DateTime.utc(dateKey.year, dateKey.month, dateKey.day);
+      if (_eventsMap.containsKey(key)) {
+        _eventsMap[key]!.removeWhere((e) => e.id == event.id);
+        if (_eventsMap[key]!.isEmpty) {
+          _eventsMap.remove(key);
+        }
+      }
+    });
+    flutterLocalNotificationsPlugin.cancel(event.id.hashCode);
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color appBarColor = Colors.white;
-    const Color textColor = Colors.black;
-    final Color iconColor = Colors.grey.shade600;
+    final iconColor = Colors.grey.shade600;
 
+    // ❌ 강제 Theme 제거
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: appBarColor,
-        elevation: 0,
-        title: const Text('스케줄러', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: iconColor),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: Text(_isTeamView ? '팀 스케줄러' : '개인 스케줄러', style: const TextStyle(color: Colors.black)),
         actions: [
           IconButton(
             icon: Icon(Icons.add, color: iconColor),
-            onPressed: _showAddEventDialog,
+            onPressed: _isTeamView
+                ? () => _teamSchedulerKey.currentState?.addMilestone()
+                : _showAddEventDialog, // 개인 일정 추가
+            tooltip: _isTeamView ? '마일스톤 추가' : '일정 추가',
           ),
-          const SizedBox(width: 16),
+          Switch(
+            value: _isTeamView,
+            onChanged: (val) {
+              setState(() {
+                _isTeamView = val;
+              });
+            },
+            inactiveTrackColor: Colors.grey.shade400,
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: _isTeamView
+          ? TeamSchedulerPage(key: _teamSchedulerKey)
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            // 1. Table Calendar 위젯
-            Card(
-              elevation: 4.0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              // 💥 const 제거 (오류 해결)
-              child: TableCalendar(
-                firstDay: DateTime.utc(2023, 1, 1),
-                lastDay: DateTime.utc(2030, 12, 31),
-                focusedDay: _focusedDay,
-                calendarFormat: _calendarFormat,
-                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                eventLoader: _getEventsForDay,
-
-                onDaySelected: (selectedDay, focusedDay) {
-                  if (!isSameDay(_selectedDay, selectedDay)) {
-                    setState(() {
-                      _selectedDay = selectedDay;
-                      _focusedDay = focusedDay;
-                    });
-                  }
-                },
-                onFormatChanged: (format) {
-                  if (_calendarFormat != format) {
-                    setState(() {
-                      _calendarFormat = format;
-                    });
-                  }
-                },
-                onPageChanged: (focusedDay) {
-                  _focusedDay = focusedDay;
-                },
-
-                // 이벤트 표시 마커 스타일 (null 체크 추가)
-                calendarBuilders: CalendarBuilders(
-                  markerBuilder: (context, day, events) {
-                    final nonNullEvents = events.whereType<Event>();
-                    if (nonNullEvents.isEmpty) return const SizedBox();
-
-                    final pendingCount = nonNullEvents.where((e) => !e.isCompleted).length;
-
-                    return Positioned(
-                      right: 1,
-                      bottom: 1,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: pendingCount > 0 ? Colors.red : Colors.green,
-                          borderRadius: BorderRadius.circular(5.0),
-                        ),
-                        width: 10.0,
-                        height: 10.0,
-                      ),
-                    );
-                  },
-                ),
-              ),
+            TableCalendar(
+              firstDay: DateTime.utc(2023, 1, 1),
+              lastDay: DateTime.utc(2030, 12, 31),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(day, _selectedDay),
+              calendarFormat: _calendarFormat,
+              eventLoader: _getEventsForDay,
+              onDaySelected: (selected, focused) {
+                setState(() {
+                  _selectedDay = selected;
+                  _focusedDay = focused;
+                });
+              },
+              onFormatChanged: (format) {
+                setState(() {
+                  _calendarFormat = format;
+                });
+              },
             ),
-
-            const SizedBox(height: 24),
-
-            // 2. 선택된 날짜의 이벤트 목록
-            Text(
-              '${_selectedDay.toLocal().toString().split(' ')[0]} 일정 (${_getEventsForDay(_selectedDay).length}개)',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
-            ),
-            const Divider(),
-
-            // 이벤트 리스트
+            const Divider(height: 1),
+            // 선택된 날짜의 일정 목록
             ..._getEventsForDay(_selectedDay).map((event) {
               return ListTile(
-                key: ValueKey(event.id),
-                leading: Icon(
-                  event.isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                  color: event.isCompleted ? Colors.green : Colors.red,
-                ),
                 title: Text(
                   event.title,
                   style: TextStyle(
-                      decoration: event.isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
-                      color: textColor
+                    decoration: event.isCompleted ? TextDecoration.lineThrough : TextDecoration.none,
+                    color: event.isCompleted ? Colors.grey : Colors.black,
                   ),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.refresh, size: 20),
-                  onPressed: () => _toggleEventStatus(event),
-                  tooltip: '진행 상태 변경',
-                ),
-                onTap: () {
-                  _showErrorSnackBar('프로젝트 ID: ${event.projectId}');
-                },
-              );
-            }),
+                onTap: () => _toggleEventCompletion(_selectedDay, event),
 
-            const SizedBox(height: 50),
-
-            // 3. 진행률 시각화 Placeholder (Const 제거)
-            const Text(
-              '프로젝트 진행률 시각화 (MVP)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
-            ),
-            const Divider(),
-            // 💥 Const 제거 (오류 해결)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('프로젝트 매칭 시스템 개발', style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
-                    const SizedBox(height: 8),
-                    // 가짜 진행률 바
-                    LinearProgressIndicator(
-                      value: 0.70, // 70% 진행
-                      backgroundColor: Colors.grey,
-                      color: Colors.blueAccent,
+                    event.isCompleted
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                    const SizedBox(width: 8),
+
+                    // 삭제 버튼
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.redAccent),
+                      onPressed: () => _deleteEvent(_selectedDay, event),
                     ),
-                    const SizedBox(height: 8),
-                    Text('70% 완료 (12월 19일 마감)', style: TextStyle(fontSize: 12, color: iconColor)),
                   ],
                 ),
-              ),
-            ),
-
+              );
+            }),
           ],
         ),
       ),
