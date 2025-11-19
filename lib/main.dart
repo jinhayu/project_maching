@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'pages/auth_gate_page.dart'; // <--- '인증 관문'을 import
+// 💡 날짜 형식을 위해 추가된 패키지
+import 'package:intl/date_symbol_data_local.dart';
+import 'pages/auth_gate_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // .env 파일 로드
   await dotenv.load(fileName: ".env");
 
-  // Supabase 초기화 (URL/Key는 .env에서)
+  // 💡 날짜 데이터 초기화 (LocaleDataException 해결)
+  await initializeDateFormatting();
+
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+
   runApp(const MyApp());
 }
 
@@ -22,29 +26,24 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return MaterialApp(
-      debugShowCheckedModeBanner: false, // 디버그 배너 숨기기
+      debugShowCheckedModeBanner: false,
       title: '프로젝트 매칭 시스템',
 
-      // 💡 FIX 1: 테마 모드를 Light로 고정
+      // 기본 테마를 라이트 모드로 설정
       themeMode: ThemeMode.light,
-
-      // 💡 FIX 2: 기본 Light Theme 정의 (기존 darkTheme 제거)
       theme: ThemeData(
         brightness: Brightness.light,
         primarySwatch: Colors.blue,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white, // AppBar 배경을 흰색으로 설정
-          foregroundColor: Colors.black,  // AppBar 아이콘/텍스트 색상을 검은색으로 설정
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
           elevation: 1,
         ),
-        scaffoldBackgroundColor: Colors.grey[50], // 연한 회색 배경
+        scaffoldBackgroundColor: Colors.grey[50],
       ),
 
-      // 참고: darkTheme 속성은 이제 무시됩니다.
-
-      home: const AuthGate(), // 앱의 첫 화면을 'AuthGate'로 유지
+      home: const AuthGate(),
     );
   }
 }

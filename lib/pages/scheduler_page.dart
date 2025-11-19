@@ -47,6 +47,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
   @override
   void initState() {
     super.initState();
+    // 캘린더 초기화 시 시간 정보 제거 (UTC 자정)
     _selectedDay = DateTime.utc(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     _configureLocalNotifications();
     _loadEvents();
@@ -65,6 +66,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
     flutterLocalNotificationsPlugin.initialize(initSettings);
   }
 
+  // --- Supabase에서 개인 일정 로드 ---
   Future<void> _loadEvents() async {
     if (_client.auth.currentUser == null) {
       if (mounted) setState(() { _isLoading = false; });
@@ -76,13 +78,16 @@ class _SchedulerPageState extends State<SchedulerPage> {
       final userId = _client.auth.currentUser!.id;
       final response = await _client
           .from('personal_events')
-          .select('id, title, date, status, project_id')
+          .select('id, title, event_date, status, project_id')
           .eq('user_id', userId);
 
       final Map<DateTime, List<Event>> tempMap = {};
 
       for (var data in response) {
-        final eventDateTime = DateTime.parse(data['date'] as String).toUtc();
+        // 💡 FIX: DB(UTC) 시간을 가져와서 내 핸드폰 시간(Local)으로 변환
+        final eventDateTime = DateTime.parse(data['event_date'] as String).toLocal();
+
+        // 변환된 로컬 시간을 기준으로 캘린더 키(UTC 자정) 생성
         final dateKey = DateTime.utc(eventDateTime.year, eventDateTime.month, eventDateTime.day);
 
         final event = Event(
@@ -105,7 +110,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading events: $e');
+      debugPrint('일정 로드 오류: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -116,6 +121,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
   }
 
   List<Event> _getEventsForDay(DateTime day) {
+    // 캘린더에서 선택된 날짜에 맞는 이벤트 리스트 반환
     final dateKey = DateTime.utc(day.year, day.month, day.day);
     return _eventsMap[dateKey] ?? [];
   }
@@ -132,7 +138,13 @@ class _SchedulerPageState extends State<SchedulerPage> {
       event.title,
       scheduledDate,
       const fln.NotificationDetails(
-        android: fln.AndroidNotificationDetails('personal_events_channel', '개인 일정', channelDescription: '개인 일정 알림', importance: fln.Importance.max, priority: fln.Priority.high,),
+        android: fln.AndroidNotificationDetails(
+            'personal_events_channel',
+            '개인 일정',
+            channelDescription: '개인 일정 알림',
+            importance: fln.Importance.max,
+            priority: fln.Priority.high
+        ),
       ),
       androidScheduleMode: fln.AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation: fln.UILocalNotificationDateInterpretation.absoluteTime,
@@ -149,7 +161,11 @@ class _SchedulerPageState extends State<SchedulerPage> {
         final localSelectedDate = _selectedDay.toLocal().toString().split(' ')[0];
         return AlertDialog(
           title: Text('새 일정 추가 ($localSelectedDate)'),
-          content: TextField(controller: titleController, decoration: const InputDecoration(hintText: '일정 제목')),
+          content: TextField(
+            controller: titleController,
+            decoration: const InputDecoration(hintText: '일정 제목'),
+            autofocus: true,
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
             TextButton(
@@ -157,28 +173,34 @@ class _SchedulerPageState extends State<SchedulerPage> {
                 if (titleController.text.isEmpty) return;
                 try {
                   final userId = _client.auth.currentUser!.id;
+                  // 저장할 때는 UTC로 변환해서 저장 (표준)
                   final eventDateUtc = _selectedDay.toUtc().toIso8601String();
 
                   final response = await _client.from('personal_events').insert({
                     'user_id': userId,
                     'project_id': 'default',
                     'title': titleController.text,
-                    'date': eventDateUtc,
+                    'event_date': eventDateUtc,
                     'status': 'pending',
                   }).select('id');
 
                   if (response.isNotEmpty && mounted) {
                     final newId = response.first['id'].toString();
-                    final newEvent = Event(id: newId, title: titleController.text, date: _selectedDay, isCompleted: false, projectId: 'default');
+                    final newEvent = Event(
+                        id: newId,
+                        title: titleController.text,
+                        date: _selectedDay,
+                        isCompleted: false,
+                        projectId: 'default'
+                    );
                     _scheduleNotification(newEvent);
                   }
 
                   await _loadEvents();
-                  // 💡 수정: mounted 체크 후 pop
                   if (!mounted) return;
                   Navigator.pop(context);
                 } catch (e) {
-                  debugPrint('Error adding event: $e');
+                  debugPrint('추가 오류: $e');
                 }
               },
               child: const Text('추가'),
@@ -192,10 +214,12 @@ class _SchedulerPageState extends State<SchedulerPage> {
   void _toggleEventCompletion(DateTime dateKey, Event event) async {
     final newStatus = event.isCompleted ? 'pending' : 'completed';
     try {
-      await _client.from('personal_events').update({'status': newStatus}).eq('id', event.id);
+      await _client.from('personal_events')
+          .update({'status': newStatus})
+          .eq('id', event.id);
       await _loadEvents();
     } catch (e) {
-      debugPrint('Error toggling event: $e');
+      debugPrint('상태 변경 실패: $e');
     }
   }
 
@@ -205,13 +229,14 @@ class _SchedulerPageState extends State<SchedulerPage> {
       await _loadEvents();
       flutterLocalNotificationsPlugin.cancel(event.id.hashCode);
     } catch (e) {
-      debugPrint('Error deleting event: $e');
+      debugPrint('삭제 실패: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 💡 라이트 모드 강제 적용 (Scaffold 레벨)
+    final iconColor = Colors.grey.shade600;
+
     return Theme(
       data: ThemeData.light().copyWith(
         primaryColor: Colors.blue,
@@ -227,7 +252,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
           title: Text(_isTeamView ? '팀 스케줄러' : '개인 스케줄러'),
           actions: [
             IconButton(
-              icon: const Icon(Icons.add),
+              icon: Icon(Icons.add, color: _isTeamView ? iconColor.withValues(alpha: 0.5) : iconColor),
               onPressed: _isTeamView
                   ? () => _teamSchedulerKey.currentState?.addMilestone()
                   : _showAddEventDialog,
@@ -245,10 +270,10 @@ class _SchedulerPageState extends State<SchedulerPage> {
             const SizedBox(width: 8),
           ],
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _isTeamView
+        body: _isTeamView
             ? TeamSchedulerPage(key: _teamSchedulerKey)
+            : _isLoading
+            ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
           child: Column(
             children: [
@@ -266,7 +291,6 @@ class _SchedulerPageState extends State<SchedulerPage> {
                   });
                 },
                 onFormatChanged: (format) => setState(() => _calendarFormat = format),
-                // 💡 수정: withOpacity -> withValues
                 calendarStyle: CalendarStyle(
                   todayDecoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 0.5),
@@ -283,19 +307,32 @@ class _SchedulerPageState extends State<SchedulerPage> {
                 ),
               ),
               const Divider(),
+              if (_getEventsForDay(_selectedDay).isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Text("일정이 없습니다.", style: TextStyle(color: Colors.grey)),
+                ),
               ..._getEventsForDay(_selectedDay).map((event) {
                 return ListTile(
-                  title: Text(event.title, style: TextStyle(decoration: event.isCompleted ? TextDecoration.lineThrough : null, color: event.isCompleted ? Colors.grey : Colors.black)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(event.isCompleted ? Icons.check_circle : Icons.circle_outlined, color: event.isCompleted ? Colors.green : Colors.grey),
-                      IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent), onPressed: () => _deleteEvent(_selectedDay, event)),
-                    ],
+                  leading: Icon(
+                    event.isCompleted ? Icons.check_circle : Icons.circle_outlined,
+                    color: event.isCompleted ? Colors.green : Colors.grey,
+                  ),
+                  title: Text(
+                    event.title,
+                    style: TextStyle(
+                      decoration: event.isCompleted ? TextDecoration.lineThrough : null,
+                      color: event.isCompleted ? Colors.grey : Colors.black,
+                    ),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                    onPressed: () => _deleteEvent(_selectedDay, event),
                   ),
                   onTap: () => _toggleEventCompletion(_selectedDay, event),
                 );
               }),
+              const SizedBox(height: 50),
             ],
           ),
         ),
