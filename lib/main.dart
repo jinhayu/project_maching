@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-// 📅 날짜 포맷팅 초기화
 import 'package:intl/date_symbol_data_local.dart';
-// 🔤 폰트 패키지
 import 'package:google_fonts/google_fonts.dart';
 import 'pages/auth_gate_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. .env 파일 로드
+  // .env 파일 로드
   await dotenv.load(fileName: ".env");
 
-  // 2. 날짜 포맷팅 데이터 초기화
+  // 날짜 형식을 위한 초기화
   await initializeDateFormatting();
 
-  // 3. Supabase 초기화
+  // Supabase 초기화
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
@@ -26,57 +24,230 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
+  // 💡 FIX 1: 'super-parameters' 오류 해결을 위해 구버전 문법 사용
   const MyApp({Key? key}) : super(key: key);
+
+  // 🎨 브랜드 및 공통 색상 정의
+  static const primaryColor = Color(0xFF2563EB); // Royal Blue
+  static const secondaryColor = Color(0xFFFF6B6B); // Coral Orange
+
+  // Light Mode Colors
+  static const lightBackgroundColor = Color(0xFFF8F9FA);
+  static const lightSurfaceColor = Colors.white;
+  static const lightTextColor = Color(0xFF1F2937);
+
+  // Dark Mode Colors
+  static const darkBackgroundColor = Color(0xFF121212);
+  static const darkSurfaceColor = Color(0xFF1E1E1E);
+  static const darkTextColor = Color(0xFFE0E0E0);
+
+  // 🌞 라이트 테마 설정
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+
+      fontFamily: GoogleFonts.notoSansKr().fontFamily,
+      textTheme: GoogleFonts.notoSansKrTextTheme().apply(
+        bodyColor: lightTextColor,
+        displayColor: const Color(0xFF111827),
+      ),
+
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        primary: primaryColor,
+        secondary: secondaryColor,
+        surface: lightSurfaceColor,
+        brightness: Brightness.light,
+      ),
+
+      scaffoldBackgroundColor: lightBackgroundColor,
+
+      appBarTheme: const AppBarTheme(
+        backgroundColor: lightSurfaceColor,
+        foregroundColor: Color(0xFF111827),
+        elevation: 0,
+        centerTitle: false,
+        scrolledUnderElevation: 0,
+        titleTextStyle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF111827),
+          fontFamily: 'NotoSansKR',
+        ),
+        iconTheme: IconThemeData(color: Color(0xFF4B5563)),
+      ),
+
+      // 💡 FIX 2: CardTheme -> CardThemeData로 변경
+      // 오류 로그에 따르면 현재 Flutter 버전은 CardThemeData 타입을 요구합니다.
+      cardTheme: CardThemeData(
+        color: lightSurfaceColor,
+        elevation: 2,
+        shadowColor: Colors.black.withValues(alpha: 0.05),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: EdgeInsets.zero,
+      ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: lightSurfaceColor,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: primaryColor, width: 2),
+        ),
+        labelStyle: TextStyle(color: Colors.grey.shade600),
+        hintStyle: TextStyle(color: Colors.grey.shade400),
+      ),
+
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          side: const BorderSide(color: primaryColor),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+
+      dividerTheme: DividerThemeData(
+        color: Colors.grey.shade200,
+        thickness: 1,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: Colors.grey.shade100,
+        labelStyle: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide.none),
+      ),
+    );
+  }
+
+  // 🌙 다크 테마 설정
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+
+      fontFamily: GoogleFonts.notoSansKr().fontFamily,
+      textTheme: GoogleFonts.notoSansKrTextTheme().apply(
+        bodyColor: darkTextColor,
+        displayColor: Colors.white,
+      ),
+
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        primary: primaryColor,
+        secondary: secondaryColor,
+        surface: darkSurfaceColor,
+        brightness: Brightness.dark,
+      ),
+
+      scaffoldBackgroundColor: darkBackgroundColor,
+
+      appBarTheme: const AppBarTheme(
+        backgroundColor: darkSurfaceColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        scrolledUnderElevation: 0,
+        titleTextStyle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontFamily: 'NotoSansKR',
+        ),
+        iconTheme: IconThemeData(color: darkTextColor),
+      ),
+
+      // 💡 FIX 2: CardTheme -> CardThemeData로 변경
+      cardTheme: CardThemeData(
+        color: darkSurfaceColor,
+        elevation: 4,
+        shadowColor: Colors.black.withValues(alpha: 0.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: EdgeInsets.zero,
+      ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkSurfaceColor,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade700),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade700),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: primaryColor, width: 2),
+        ),
+        labelStyle: TextStyle(color: Colors.grey.shade400),
+        hintStyle: TextStyle(color: Colors.grey.shade600),
+      ),
+
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          side: const BorderSide(color: primaryColor),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+
+      dividerTheme: DividerThemeData(
+        color: Colors.grey.shade800,
+        thickness: 1,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: Colors.grey.shade800,
+        labelStyle: const TextStyle(color: darkTextColor, fontSize: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide.none),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false, // 디버그 배너 제거
-      title: '프로젝트 매칭 시스템',
-
-      // 💡 1. 테마 모드를 '라이트'로 강제 고정
-      themeMode: ThemeMode.light,
-
-      // 💡 2. 라이트 테마 상세 설정
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-
-        // 🔤 기본 폰트를 'Noto Sans KR'로 설정
-        fontFamily: GoogleFonts.notoSansKr().fontFamily,
-
-        // 텍스트 스타일 전체에 폰트 적용
-        textTheme: GoogleFonts.notoSansKrTextTheme(),
-
-        // 기본 색상 (파란색 계열)
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
-
-        // 배경색 (연한 회색)
-        scaffoldBackgroundColor: Colors.grey[50],
-
-        // 앱바 테마 (흰색 배경, 검은 글씨)
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 1,
-          surfaceTintColor: Colors.transparent,
-        ),
-
-        // 💡 스위치 등 컴포넌트 테마 (MaterialState -> WidgetState 로 수정됨)
-        switchTheme: SwitchThemeData(
-          trackColor: WidgetStateProperty.resolveWith((states) {
-            if (!states.contains(WidgetState.selected)) {
-              return Colors.grey.shade300; // 꺼져있을 때 트랙 색상
-            }
-            return null; // 켜져있을 땐 기본값(Primary Color) 사용
-          }),
-        ),
-      ),
-
-      // 첫 화면
+      debugShowCheckedModeBanner: false,
+      title: '시너지 (Synergy)',
+      themeMode: ThemeMode.system,
+      theme: _buildLightTheme(),
+      darkTheme: _buildDarkTheme(),
       home: const AuthGate(),
     );
   }

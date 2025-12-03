@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart' as fln;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-
+import 'package:google_fonts/google_fonts.dart';
 
 // --- 팀 마일스톤 모델 ---
 class Milestone {
@@ -28,7 +28,14 @@ class Milestone {
 }
 
 class TeamSchedulerPage extends StatefulWidget {
-  const TeamSchedulerPage({Key? key}) : super(key: key);
+  final String projectId;
+  final String projectName;
+
+  const TeamSchedulerPage({
+    Key? key,
+    required this.projectId,
+    required this.projectName
+  }) : super(key: key);
 
   @override
   State<TeamSchedulerPage> createState() => TeamSchedulerPageState();
@@ -42,7 +49,6 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
   List<Milestone> _milestones = [];
   bool _isLoading = true;
 
-  // 간트 차트 UI 설정
   final double _dayWidth = 60.0;
   final double _rowHeight = 50.0;
   final double _headerHeight = 40.0;
@@ -54,6 +60,14 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
     _loadMilestones();
   }
 
+  @override
+  void didUpdateWidget(TeamSchedulerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.projectId != widget.projectId) {
+      _loadMilestones();
+    }
+  }
+
   void _configureLocalNotifications() {
     tz.initializeTimeZones();
     try { tz.setLocalLocation(tz.getLocation('Asia/Seoul')); } catch (_) { tz.setLocalLocation(tz.local); }
@@ -62,6 +76,7 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
     flutterLocalNotificationsPlugin.initialize(initSettings);
   }
 
+  // --- Supabase 로드 ---
   Future<void> _loadMilestones() async {
     if (_client.auth.currentUser == null) {
       if (mounted) setState(() => _isLoading = false);
@@ -70,18 +85,18 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
 
     setState(() => _isLoading = true);
     try {
-      final userId = _client.auth.currentUser!.id;
+      // 💡 FIX: 사용하지 않는 userId 변수 삭제
       final response = await _client
           .from('team_milestones')
           .select()
-          .eq('user_id', userId)
+          .eq('project_id', widget.projectId)
           .order('start_date', ascending: true);
 
       final List<Milestone> loaded = [];
       for (var data in response) {
         loaded.add(Milestone(
           id: data['id'].toString(),
-          title: data['title'] ?? 'No Title',
+          title: data['title'] ?? '제목 없음',
           startDate: DateTime.parse(data['start_date']).toLocal(),
           endDate: DateTime.parse(data['end_date']).toLocal(),
           color: _hexToColor(data['color_hex'] ?? '#2196F3'),
@@ -104,7 +119,6 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
     return Color(int.parse(buffer.toString(), radix: 16));
   }
 
-  // 💡 사용되지 않는 함수(unused_element) 경고 해결을 위해 addMilestone 내부에서 호출됨
   Future<void> _scheduleNotification(Milestone m) async {
     final scheduledDate = tz.TZDateTime(
         tz.local, m.endDate.year, m.endDate.month, m.endDate.day, 9, 0, 0);
@@ -122,10 +136,8 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
     );
   }
 
-  // --- 공개 메서드: 마일스톤 추가 ---
   void addMilestone() {
     final titleController = TextEditingController();
-
     DateTime selectedStartDate = DateTime.now();
     DateTime selectedEndDate = DateTime.now().add(const Duration(days: 7));
 
@@ -139,12 +151,24 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
               initialDate: isStart ? selectedStartDate : selectedEndDate,
               firstDate: DateTime(2020),
               lastDate: DateTime(2030),
+              locale: const Locale('ko', 'KR'),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    textTheme: GoogleFonts.notoSansKrTextTheme(),
+                  ),
+                  child: child!,
+                );
+              },
             );
+
             if (picked != null) {
               setStateDialog(() {
                 if (isStart) {
                   selectedStartDate = picked;
-                  if (selectedStartDate.isAfter(selectedEndDate)) selectedEndDate = selectedStartDate;
+                  if (selectedStartDate.isAfter(selectedEndDate)) {
+                    selectedEndDate = selectedStartDate;
+                  }
                 } else {
                   selectedEndDate = picked;
                 }
@@ -153,20 +177,43 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
           }
 
           return AlertDialog(
-            title: const Text('새 마일스톤 추가'),
+            title: Text('새 마일스톤 추가 (${widget.projectName})'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: '제목')),
+                TextField(
+                  controller: titleController,
+                  style: GoogleFonts.notoSansKr(),
+                  decoration: const InputDecoration(
+                    labelText: '제목',
+                    hintText: '마일스톤 제목 입력',
+                  ),
+                ),
                 const SizedBox(height: 20),
-                Row(children: [
-                  const Text('시작: '),
-                  TextButton(onPressed: () => pickDate(true), child: Text(DateFormat('yyyy-MM-dd').format(selectedStartDate))),
-                ]),
-                Row(children: [
-                  const Text('종료: '),
-                  TextButton(onPressed: () => pickDate(false), child: Text(DateFormat('yyyy-MM-dd').format(selectedEndDate))),
-                ]),
+                Row(
+                  children: [
+                    const Text('시작: '),
+                    TextButton(
+                      onPressed: () => pickDate(true),
+                      child: Text(
+                        DateFormat('yyyy-MM-dd').format(selectedStartDate),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Text('종료: '),
+                    TextButton(
+                      onPressed: () => pickDate(false),
+                      child: Text(
+                        DateFormat('yyyy-MM-dd').format(selectedEndDate),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
             actions: [
@@ -176,9 +223,10 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
                   if (titleController.text.isEmpty) return;
                   try {
                     final userId = _client.auth.currentUser!.id;
+
                     final res = await _client.from('team_milestones').insert({
                       'user_id': userId,
-                      'project_id': 'row1',
+                      'project_id': widget.projectId,
                       'title': titleController.text,
                       'start_date': selectedStartDate.toUtc().toIso8601String(),
                       'end_date': selectedEndDate.toUtc().toIso8601String(),
@@ -194,14 +242,14 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
                           endDate: selectedEndDate,
                           color: const Color(0xFF2196F3),
                           isCompleted: false,
-                          projectId: 'row1'
+                          projectId: widget.projectId
                       );
-                      _scheduleNotification(newM); // 알림 예약 호출
+                      _scheduleNotification(newM);
                     }
+
                     await _loadMilestones();
 
-                    // 💡 FIX: Async Gap 해결 (mounted 체크)
-                    if (!mounted) return;
+                    if (!ctx.mounted) return;
                     Navigator.pop(ctx);
                   } catch (e) {
                     debugPrint('Error adding: $e');
@@ -221,6 +269,8 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
       await _client.from('team_milestones').delete().eq('id', m.id);
       await _loadMilestones();
       flutterLocalNotificationsPlugin.cancel(m.id.hashCode);
+
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('마일스톤 삭제 완료')));
     } catch (e) {
       debugPrint('Error deleting: $e');
     }
@@ -230,6 +280,8 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
     try {
       await _client.from('team_milestones').update({'is_completed': !m.isCompleted}).eq('id', m.id);
       await _loadMilestones();
+
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('상태 변경 완료')));
     } catch (e) {
       debugPrint('Error toggling: $e');
     }
@@ -277,7 +329,6 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       border: Border(right: BorderSide(color: Colors.grey.shade300)),
-                      // 💡 FIX: withOpacity -> withValues
                       color: isToday ? Colors.blue.withValues(alpha: 0.1) : null,
                     ),
                     child: Column(
@@ -310,6 +361,7 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
                   width: totalDays * _dayWidth,
                   child: Stack(
                     children: [
+                      // B-1. 배경 그리드
                       Row(
                         children: List.generate(totalDays, (index) {
                           final date = minDate.add(Duration(days: index));
@@ -318,49 +370,55 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
                             width: _dayWidth,
                             decoration: BoxDecoration(
                               border: Border(right: BorderSide(color: Colors.grey.shade200)),
-                              // 💡 FIX: withOpacity -> withValues
                               color: isToday ? Colors.blue.withValues(alpha: 0.05) : null,
                             ),
                           );
                         }),
                       ),
 
-                      ..._milestones.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final m = entry.value;
-                        final startOffset = m.startDate.difference(minDate).inDays * _dayWidth;
-                        final durationDays = m.endDate.difference(m.startDate).inDays + 1;
-                        final barWidth = durationDays * _dayWidth;
+                      // B-2. 마일스톤 바
+                      if (_milestones.isNotEmpty)
+                        ..._milestones.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final m = entry.value;
 
-                        return Positioned(
-                          top: index * _rowHeight + 10,
-                          left: startOffset,
-                          width: barWidth > 0 ? barWidth : _dayWidth,
-                          height: _rowHeight - 20,
-                          child: GestureDetector(
-                            onTap: () => _toggleCompletion(m),
-                            child: Tooltip(
-                              message: "${m.title}\n${DateFormat('MM/dd').format(m.startDate)} ~ ${DateFormat('MM/dd').format(m.endDate)}",
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  // 💡 FIX: withOpacity -> withValues
-                                  color: m.isCompleted ? Colors.grey : m.color.withValues(alpha: 0.8),
-                                  borderRadius: BorderRadius.circular(6),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2, offset: const Offset(1, 1))
-                                  ],
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  m.title,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, overflow: TextOverflow.ellipsis),
+                          final startOffset = m.startDate.difference(minDate).inDays * _dayWidth;
+                          final durationDays = m.endDate.difference(m.startDate).inDays + 1;
+                          final barWidth = durationDays * _dayWidth;
+
+                          return Positioned(
+                            top: index * _rowHeight + 10,
+                            left: startOffset,
+                            width: barWidth > 0 ? barWidth : _dayWidth,
+                            height: _rowHeight - 20,
+                            child: GestureDetector(
+                              onTap: () => _toggleCompletion(m),
+                              child: Tooltip(
+                                message: "${m.title}\n${DateFormat('MM/dd').format(m.startDate)} ~ ${DateFormat('MM/dd').format(m.endDate)}",
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: m.isCompleted ? Colors.grey : m.color.withValues(alpha: 0.8),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2, offset: const Offset(1, 1))
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    m.title,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        overflow: TextOverflow.ellipsis
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        }),
                     ],
                   ),
                 ),
@@ -385,18 +443,22 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-
-          const Text('팀 간트 차트', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('${widget.projectName} 일정', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _buildCustomGanttChart(),
 
           const SizedBox(height: 24),
-
           const Text('프로젝트 진행률', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const Divider(),
-          LinearProgressIndicator(value: progress, color: Colors.blue, backgroundColor: Colors.grey[300], minHeight: 10),
+          LinearProgressIndicator(
+            value: progress,
+            color: Colors.blue,
+            backgroundColor: Colors.grey.shade300,
+            minHeight: 10,
+            borderRadius: BorderRadius.circular(5),
+          ),
           const SizedBox(height: 8),
           Text('${(progress * 100).toInt()}% 완료', style: const TextStyle(fontWeight: FontWeight.bold)),
 
@@ -408,7 +470,13 @@ class TeamSchedulerPageState extends State<TeamSchedulerPage> {
           else
             Column(
               children: _milestones.map((m) => ListTile(
-                title: Text(m.title, style: TextStyle(decoration: m.isCompleted ? TextDecoration.lineThrough : null, color: m.isCompleted ? Colors.grey : Colors.black)),
+                title: Text(
+                    m.title,
+                    style: TextStyle(
+                        decoration: m.isCompleted ? TextDecoration.lineThrough : null,
+                        color: m.isCompleted ? Colors.grey : Colors.black
+                    )
+                ),
                 subtitle: Text('${DateFormat('MM/dd').format(m.startDate)} ~ ${DateFormat('MM/dd').format(m.endDate)}'),
                 trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteMilestone(m)),
                 onTap: () => _toggleCompletion(m),

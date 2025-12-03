@@ -4,7 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart' as
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'team_scheduler_page.dart';
+import 'team_scheduler_page.dart'; // TeamSchedulerPage import
 
 // --- 개인 일정 모델 ---
 class Event {
@@ -34,23 +34,31 @@ class _SchedulerPageState extends State<SchedulerPage> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.month;
+
+  // 뷰 모드 (false: 개인, true: 팀)
   bool _isTeamView = false;
   bool _isLoading = true;
 
-  final GlobalKey<TeamSchedulerPageState> _teamSchedulerKey = GlobalKey();
-  final SupabaseClient _client = Supabase.instance.client;
+  // 🆕 내 프로젝트 목록 및 선택된 프로젝트 정보
+  List<Map<String, dynamic>> _myProjects = [];
+  String? _selectedProjectId;
+  String _selectedProjectName = '';
 
-  Map<DateTime, List<Event>> _eventsMap = {};
+  // TeamSchedulerPage의 상태에 접근하기 위한 GlobalKey
+  final GlobalKey<TeamSchedulerPageState> _teamSchedulerKey = GlobalKey();
+
+  final SupabaseClient _client = Supabase.instance.client;
   final fln.FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
   fln.FlutterLocalNotificationsPlugin();
+
+  Map<DateTime, List<Event>> _eventsMap = {};
 
   @override
   void initState() {
     super.initState();
-    // 캘린더 초기화 시 시간 정보 제거 (UTC 자정)
     _selectedDay = DateTime.utc(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     _configureLocalNotifications();
-    _loadEvents();
+    _loadEvents(); // 초기엔 개인 일정 로드
   }
 
   void _configureLocalNotifications() {
@@ -60,13 +68,47 @@ class _SchedulerPageState extends State<SchedulerPage> {
     } catch (_) {
       tz.setLocalLocation(tz.local);
     }
-
     const androidSettings = fln.AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = fln.InitializationSettings(android: androidSettings);
     flutterLocalNotificationsPlugin.initialize(initSettings);
   }
 
-  // --- Supabase에서 개인 일정 로드 ---
+  // --- 🆕 내가 속한 프로젝트 목록 불러오기 ---
+  Future<void> _loadMyProjects() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final response = await _client
+          .from('team_members')
+          .select('projects(id, title)')
+          .eq('user_id', userId);
+
+      final List<Map<String, dynamic>> loaded = [];
+      for (var item in response) {
+        if (item['projects'] != null) {
+          loaded.add({
+            'id': item['projects']['id'].toString(),
+            'title': item['projects']['title'] as String,
+          });
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _myProjects = loaded;
+          if (_myProjects.isNotEmpty && _selectedProjectId == null) {
+            _selectedProjectId = _myProjects[0]['id'];
+            _selectedProjectName = _myProjects[0]['title'];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('내 프로젝트 로드 실패: $e');
+    }
+  }
+
+  // --- 개인 일정 로드 ---
   Future<void> _loadEvents() async {
     if (_client.auth.currentUser == null) {
       if (mounted) setState(() { _isLoading = false; });
@@ -84,10 +126,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
       final Map<DateTime, List<Event>> tempMap = {};
 
       for (var data in response) {
-        // 💡 FIX: DB(UTC) 시간을 가져와서 내 핸드폰 시간(Local)으로 변환
         final eventDateTime = DateTime.parse(data['event_date'] as String).toLocal();
-
-        // 변환된 로컬 시간을 기준으로 캘린더 키(UTC 자정) 생성
         final dateKey = DateTime.utc(eventDateTime.year, eventDateTime.month, eventDateTime.day);
 
         final event = Event(
@@ -110,7 +149,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
         });
       }
     } catch (e) {
-      debugPrint('일정 로드 오류: $e');
+      debugPrint('개인 일정 로드 실패: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -121,7 +160,6 @@ class _SchedulerPageState extends State<SchedulerPage> {
   }
 
   List<Event> _getEventsForDay(DateTime day) {
-    // 캘린더에서 선택된 날짜에 맞는 이벤트 리스트 반환
     final dateKey = DateTime.utc(day.year, day.month, day.day);
     return _eventsMap[dateKey] ?? [];
   }
@@ -159,6 +197,7 @@ class _SchedulerPageState extends State<SchedulerPage> {
       context: context,
       builder: (context) {
         final localSelectedDate = _selectedDay.toLocal().toString().split(' ')[0];
+
         return AlertDialog(
           title: Text('새 일정 추가 ($localSelectedDate)'),
           content: TextField(
@@ -167,13 +206,19 @@ class _SchedulerPageState extends State<SchedulerPage> {
             autofocus: true,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('취소')
+            ),
             TextButton(
               onPressed: () async {
+                // 💡 FIX: Navigator 객체를 비동기 작업 시작 전에 미리 캡처합니다.
+                // 이렇게 하면 await 이후에 context를 직접 참조하지 않아 경고가 사라집니다.
+                final navigator = Navigator.of(context);
+
                 if (titleController.text.isEmpty) return;
                 try {
                   final userId = _client.auth.currentUser!.id;
-                  // 저장할 때는 UTC로 변환해서 저장 (표준)
                   final eventDateUtc = _selectedDay.toUtc().toIso8601String();
 
                   final response = await _client.from('personal_events').insert({
@@ -197,8 +242,10 @@ class _SchedulerPageState extends State<SchedulerPage> {
                   }
 
                   await _loadEvents();
-                  if (!mounted) return;
-                  Navigator.pop(context);
+
+                  // 💡 FIX: 캡처해둔 navigator를 사용하여 팝업을 닫습니다.
+                  navigator.pop();
+
                 } catch (e) {
                   debugPrint('추가 오류: $e');
                 }
@@ -249,20 +296,60 @@ class _SchedulerPageState extends State<SchedulerPage> {
       ),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_isTeamView ? '팀 스케줄러' : '개인 스케줄러'),
+          title: _isTeamView && _myProjects.isNotEmpty
+              ? DropdownButton<String>(
+            value: _selectedProjectId,
+            dropdownColor: Colors.white,
+            underline: const SizedBox(),
+            icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              fontFamily: 'NotoSansKR',
+            ),
+            items: _myProjects.map((project) {
+              return DropdownMenuItem<String>(
+                value: project['id'],
+                child: Text(project['title']),
+              );
+            }).toList(),
+            onChanged: (newId) {
+              setState(() {
+                _selectedProjectId = newId;
+                _selectedProjectName = _myProjects.firstWhere((p) => p['id'] == newId)['title'];
+              });
+            },
+          )
+              : Text(
+            _isTeamView ? (_myProjects.isEmpty ? '참여중인 프로젝트 없음' : '팀 스케줄러') : '개인 스케줄러',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           actions: [
             IconButton(
               icon: Icon(Icons.add, color: _isTeamView ? iconColor.withValues(alpha: 0.5) : iconColor),
-              onPressed: _isTeamView
-                  ? () => _teamSchedulerKey.currentState?.addMilestone()
-                  : _showAddEventDialog,
+              onPressed: () {
+                if (_isTeamView) {
+                  if (_selectedProjectId != null) {
+                    _teamSchedulerKey.currentState?.addMilestone();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('선택된 프로젝트가 없습니다.')));
+                  }
+                } else {
+                  _showAddEventDialog();
+                }
+              },
             ),
             Switch(
               value: _isTeamView,
               onChanged: (val) {
                 setState(() {
                   _isTeamView = val;
-                  if(!val) _loadEvents();
+                  if (_isTeamView) {
+                    _loadMyProjects();
+                  } else {
+                    _loadEvents();
+                  }
                 });
               },
               inactiveTrackColor: Colors.grey.shade300,
@@ -271,7 +358,19 @@ class _SchedulerPageState extends State<SchedulerPage> {
           ],
         ),
         body: _isTeamView
-            ? TeamSchedulerPage(key: _teamSchedulerKey)
+            ? (_selectedProjectId != null
+            ? TeamSchedulerPage(
+          key: _teamSchedulerKey,
+          projectId: _selectedProjectId!,
+          projectName: _selectedProjectName,
+        )
+            : const Center(
+          child: Text(
+            "참여 중인 프로젝트가 없습니다.\n프로젝트를 생성하거나 지원해보세요.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+        ))
             : _isLoading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(

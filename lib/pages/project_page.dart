@@ -1,26 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-// import 'package:flutter/foundation.dart'; // 💥 불필요한 import 제거
-
-// 프로젝트 데이터를 담을 클래스에 'required_skills' 추가
-class Project {
-  final String id;
-  final String title;
-  final String description;
-  final String ownerId;
-  final List<String> requiredSkills; // (AI 매칭용)
-  double matchScore; // 💥 non-final 필드
-
-  // 💥 const 생성자 제거 (오류 해결)
-  Project({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.ownerId,
-    required this.requiredSkills,
-    this.matchScore = 0.0, // 기본값 0
-  });
-}
+import '../models/project_model.dart';
+import '../services/project_service.dart';
+// 상세/생성 페이지는 기존에 만든 파일 경로를 사용합니다.
+import 'project/project_create_page.dart';
+import 'project/project_detail_page.dart';
 
 class ProjectPage extends StatefulWidget {
   const ProjectPage({Key? key}) : super(key: key);
@@ -30,228 +13,255 @@ class ProjectPage extends StatefulWidget {
 }
 
 class _ProjectPageState extends State<ProjectPage> {
-  late final SupabaseClient _client;
+  final ProjectService _projectService = ProjectService();
+  final TextEditingController _searchController = TextEditingController();
+
   List<Project> _projects = [];
-  List<String> _mySkills = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _client = Supabase.instance.client;
-    _initializeData();
+    _loadData();
   }
 
-  Future<void> _initializeData() async {
-    setState(() { _isLoading = true; });
+  Future<void> _loadData({String? query}) async {
+    if (_projects.isEmpty) setState(() => _isLoading = true);
+
     try {
-      await _loadMySkills();
-      await _loadProjectsAndCalculateScores();
+      final projects = await _projectService.fetchProjects(query: query);
+      if (mounted) {
+        setState(() {
+          _projects = projects;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      _showErrorSnackBar('데이터 초기화 실패: $e');
-    }
-    setState(() { _isLoading = false; });
-  }
-
-  Future<void> _loadMySkills() async {
-    final userId = _client.auth.currentUser!.id;
-    final data = await _client
-        .from('profiles')
-        .select('skills')
-        .eq('id', userId)
-        .single();
-    final skillsList = (data['skills'] as List<dynamic>?) ?? [];
-    _mySkills = skillsList.map((skill) => skill as String).toList();
-  }
-
-  Future<void> _loadProjectsAndCalculateScores() async {
-    final response = await _client
-        .from('projects')
-        .select()
-        .order('created_at', ascending: false);
-
-    final List<Project> loadedProjects = response.map((data) {
-      final skillsList = (data['required_skills'] as List<dynamic>?) ?? [];
-      final requiredSkills = skillsList.map((skill) => skill as String).toList();
-
-      final project = Project(
-        id: data['id'] as String,
-        title: data['title'] as String,
-        description: data['description'] as String,
-        ownerId: data['owner_id'] as String,
-        requiredSkills: requiredSkills,
-      );
-      project.matchScore = _calculateMockMatchScore(requiredSkills);
-      return project;
-    }).toList();
-
-    loadedProjects.sort((a, b) => b.matchScore.compareTo(a.matchScore));
-
-    setState(() {
-      _projects = loadedProjects;
-    });
-  }
-
-  double _calculateMockMatchScore(List<String> requiredSkills) {
-    if (requiredSkills.isEmpty) {
-      return 0;
-    }
-    final commonSkills = _mySkills.where((mySkill) {
-      final mySkillTrimmed = mySkill.trim().toLowerCase();
-      return requiredSkills.any((reqSkill) =>
-      reqSkill.trim().toLowerCase() == mySkillTrimmed
-      );
-    }).length;
-    final score = (commonSkills / requiredSkills.length) * 100;
-    return score;
-  }
-
-
-  void _showAddProjectDialog() {
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-    final skillsController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('새 프로젝트 생성'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(hintText: '프로젝트 제목'),
-                ),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(hintText: '프로젝트 설명'),
-                ),
-                TextField(
-                  controller: skillsController,
-                  decoration: const InputDecoration(
-                    hintText: '필요 스킬 (쉼표로 구분)',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (titleController.text.isEmpty) return;
-
-                try {
-                  final userId = _client.auth.currentUser!.id;
-
-                  final skillsList = skillsController.text
-                      .split(',')
-                      .map((s) => s.trim())
-                      .where((s) => s.isNotEmpty)
-                      .toList();
-
-                  final newProjectData = await _client.from('projects').insert({
-                    'owner_id': userId,
-                    'title': titleController.text,
-                    'description': descriptionController.text,
-                    'required_skills': skillsList,
-                  }).select();
-
-                  if (!mounted) return; // 💥 Context 경고 해결
-
-                  final newProject = Project(
-                    id: newProjectData[0]['id'] as String,
-                    title: newProjectData[0]['title'] as String,
-                    description: newProjectData[0]['description'] as String,
-                    ownerId: newProjectData[0]['owner_id'] as String,
-                    requiredSkills: skillsList,
-                    matchScore: _calculateMockMatchScore(skillsList),
-                  );
-
-                  setState(() {
-                    _projects.insert(0, newProject);
-                    _projects.sort((a, b) => b.matchScore.compareTo(a.matchScore));
-                  });
-
-                  Navigator.pop(context);
-                } catch (e) {
-                  if (!mounted) return; // 💥 Context 경고 해결
-                  _showErrorSnackBar('프로젝트 저장 실패: $e');
-                }
-              },
-              child: const Text('생성'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ));
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color scaffoldBgColor = Color.fromARGB(255, 237, 231, 246); // Light Purple for the content area
-    const Color appBarColor = Colors.white;
-    const Color textColor = Colors.black;
-    final Color iconColor = Colors.grey.shade600;
-
     return Scaffold(
-      backgroundColor: scaffoldBgColor,
       appBar: AppBar(
-        backgroundColor: appBarColor,
-        elevation: 1,
-        title: const Text('프로젝트 목록', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add_circle_outline, color: iconColor),
-            tooltip: '새 프로젝트 생성',
-            onPressed: _showAddProjectDialog,
+        title: const Text('프로젝트 찾기'),
+        automaticallyImplyLeading: false, // 뒤로가기 버튼 제거 (메인 탭용)
+      ),
+      body: Column(
+        children: [
+          // 🔍 검색창 (디자인 적용)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: '관심 기술, 제목 검색 (예: Flutter)',
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.grey),
+                  onPressed: () {
+                    _searchController.clear();
+                    _loadData();
+                  },
+                )
+                    : null,
+              ),
+              onSubmitted: (value) => _loadData(query: value),
+              onChanged: (value) => setState(() {}),
+            ),
+          ),
+
+          // 프로젝트 목록
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _projects.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+                ],
+              ),
+            )
+                : RefreshIndicator(
+              onRefresh: () => _loadData(query: _searchController.text),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: _projects.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  return _ProjectCard(
+                    project: _projects[index],
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => ProjectDetailPage(project: _projects[index])),
+                      );
+                      _loadData(query: _searchController.text);
+                    },
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ProjectCreatePage()),
+          );
+          if (result == true) _loadData();
+        },
+        label: const Text('글쓰기'),
+        icon: const Icon(Icons.edit),
+      ),
+    );
+  }
+}
 
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-        onRefresh: _initializeData, // 당겨서 새로고침 (매칭 점수 다시 계산)
-        child: ListView.builder(
-          itemCount: _projects.length,
-          itemBuilder: (context, index) {
-            final project = _projects[index];
-            return Column(
-              children: [
-                ListTile(
-                  title: Text(project.title, style: const TextStyle(color: textColor, fontWeight: FontWeight.w600)),
-                  subtitle: Text(project.description, style: TextStyle(color: iconColor)),
-                  leading: CircleAvatar(
-                    child: Text('${project.matchScore.toInt()}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                    backgroundColor: project.matchScore > 70 ? Colors.green.shade600 : (project.matchScore > 30 ? Colors.orange.shade600 : Colors.grey.shade600),
+class _ProjectCard extends StatelessWidget {
+  final Project project;
+  final VoidCallback onTap;
+
+  const _ProjectCard({required this.project, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    // 기술 스택 태그 처리
+    final techTags = project.techStack.isNotEmpty
+        ? project.techStack.split(',').take(3).toList()
+        : [];
+
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. 상단: 상태 배지 & 제목
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _StatusBadge(isRecruiting: project.isRecruiting),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      project.title,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, height: 1.3),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  // 💥 child 속성 순서 경고 해결
-                  trailing: Text(
-                    project.requiredSkills.join(', '),
-                    style: TextStyle(fontSize: 12, color: iconColor),
-                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // 2. 설명
+              Text(
+                project.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.grey[600], fontSize: 14, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+
+              // 3. 태그 (Chips)
+              if (techTags.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  children: techTags.map((tag) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      tag.trim(),
+                      style: TextStyle(color: Colors.grey[700], fontSize: 11),
+                    ),
+                  )).toList(),
                 ),
-                Divider(height: 1, color: Colors.grey.shade300),
-              ],
-            );
-          },
+
+              if (techTags.isNotEmpty) const SizedBox(height: 16),
+
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+
+              // 4. 하단 정보 (인원, 조회수, 좋아요)
+              Row(
+                children: [
+                  _IconText(icon: Icons.people_outline, text: '최대 ${project.maxMembers}명'),
+                  const SizedBox(width: 16),
+                  _IconText(icon: Icons.remove_red_eye_outlined, text: '${project.viewCount}'),
+                  const SizedBox(width: 16),
+                  _IconText(
+                      icon: project.isLiked ? Icons.favorite : Icons.favorite_border,
+                      text: '${project.likeCount}',
+                      color: project.isLiked ? Colors.red : null
+                  ),
+                  const Spacer(),
+                  Text(
+                      '자세히 보기',
+                      style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold, fontSize: 13)
+                  ),
+                  Icon(Icons.chevron_right, size: 16, color: Theme.of(context).primaryColor),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _IconText extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color? color;
+
+  const _IconText({required this.icon, required this.text, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color ?? Colors.grey[500]),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(fontSize: 12, color: color ?? Colors.grey[600], fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool isRecruiting;
+  const _StatusBadge({required this.isRecruiting});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isRecruiting ? const Color(0xFF10B981) : const Color(0xFF9CA3AF);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        isRecruiting ? '모집중' : '마감',
+        style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700),
       ),
     );
   }

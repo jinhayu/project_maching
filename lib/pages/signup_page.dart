@@ -45,6 +45,11 @@ class _SignupPageState extends State<SignupPage> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () async {
+              // 💡 [핵심] context를 사용하는 객체들을 await 전에 미리 변수에 담아둡니다.
+              // 이렇게 하면 비동기 작업 후에 context를 직접 참조하지 않아 경고가 사라집니다.
+              final navigator = Navigator.of(context);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+
               setState(() {
                 _loading = true;
               });
@@ -53,33 +58,37 @@ class _SignupPageState extends State<SignupPage> {
                 final email = _emailController.text;
                 final password = _passwordController.text;
 
+                // ⏳ 비동기 작업 (회원가입)
                 await Supabase.instance.client.auth.signUp(
                   email: email,
                   password: password,
                 );
 
-                // 💥 Context 경고 해결: 비동기 갭 이후 mounted 체크 추가
+                // 안전을 위해 mounted 체크는 유지합니다.
                 if (!mounted) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text(
-                      '회원가입 성공! 이메일 인증을 확인하세요.'),
+                // 💡 context 대신 미리 만들어둔 변수(scaffoldMessenger)를 사용합니다.
+                scaffoldMessenger.showSnackBar(const SnackBar(
+                  content: Text('회원가입 성공! 이메일 인증을 확인하세요.'),
                   backgroundColor: Colors.green,
                 ));
-                Navigator.pop(context);
+
+                // 💡 context 대신 미리 만들어둔 변수(navigator)를 사용합니다.
+                navigator.pop();
 
               } catch (e) {
-                // 💥 Context 경고 해결: 비동기 갭 이후 mounted 체크 추가
                 if (!mounted) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                // 에러 메시지 표시
+                scaffoldMessenger.showSnackBar(SnackBar(
                   content: Text('회원가입 실패: $e'),
                   backgroundColor: Colors.red,
                 ));
+
+                setState(() {
+                  _loading = false;
+                });
               }
-              setState(() {
-                _loading = false;
-              });
             },
             child: const Text('Signup'),
           ),
