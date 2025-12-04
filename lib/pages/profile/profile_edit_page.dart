@@ -17,7 +17,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   final _profileService = ProfileService();
 
   late TextEditingController _usernameController;
-  late TextEditingController _positionController;
+  late TextEditingController _departmentController; // 💡 FIX: department 컨트롤러
   late TextEditingController _bioController;
   late TextEditingController _techStackController;
   late TextEditingController _blogUrlController;
@@ -27,9 +27,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   @override
   void initState() {
     super.initState();
-    // 기존 데이터로 초기화
+    // 💡 FIX: department 필드를 사용해 컨트롤러 초기화
     _usernameController = TextEditingController(text: widget.profile.username);
-    _positionController = TextEditingController(text: widget.profile.position);
+    _departmentController = TextEditingController(text: widget.profile.department);
     _bioController = TextEditingController(text: widget.profile.bio);
     _techStackController = TextEditingController(text: widget.profile.techStack);
     _blogUrlController = TextEditingController(text: widget.profile.blogUrl);
@@ -38,7 +38,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   @override
   void dispose() {
     _usernameController.dispose();
-    _positionController.dispose();
+    _departmentController.dispose();
     _bioController.dispose();
     _techStackController.dispose();
     _blogUrlController.dispose();
@@ -51,9 +51,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     setState(() => _isSaving = true);
 
     try {
+      // 💡 FIX: department 인자 전달
       await _profileService.updateProfile(
         username: _usernameController.text,
-        position: _positionController.text,
+        department: _departmentController.text,
         bio: _bioController.text,
         techStack: _techStackController.text,
         blogUrl: _blogUrlController.text,
@@ -61,7 +62,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('저장되었습니다.')));
-        Navigator.pop(context, true); // true를 반환하여 이전 화면 갱신
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -94,6 +95,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextFormField(
                 controller: _usernameController,
@@ -106,16 +108,19 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                 validator: (val) => val!.isEmpty ? '닉네임을 입력해주세요' : null,
               ),
               const SizedBox(height: 16),
+
+              // 💡 FIX: 학부/학과 입력 필드
               TextFormField(
-                controller: _positionController,
+                controller: _departmentController,
                 style: GoogleFonts.notoSansKr(),
                 decoration: const InputDecoration(
-                  labelText: '직군 / 포지션',
+                  labelText: '학부 / 학과', // 라벨 변경
                   border: OutlineInputBorder(),
-                  hintText: '예: Flutter 개발자, UI 디자이너',
+                  hintText: '예: 컴퓨터공학과, 시각디자인과',
                 ),
               ),
               const SizedBox(height: 16),
+
               TextFormField(
                 controller: _techStackController,
                 style: GoogleFonts.notoSansKr(),
@@ -148,6 +153,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                   prefixIcon: Icon(Icons.link),
                 ),
               ),
+              const SizedBox(height: 40),
             ],
           ),
         ),

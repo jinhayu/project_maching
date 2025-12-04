@@ -47,5 +47,5 @@ class Application {
   // UI 편의용 Getter
   String get applicantName => applicantProfile?.username ?? '알 수 없음';
   String get applicantEmail => applicantProfile?.email ?? '-';
-  String get applicantPosition => applicantProfile?.position ?? '직군 미설정';
+  String get applicantPosition => applicantProfile?.department ?? '직군 미설정';
 }

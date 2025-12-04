@@ -1,21 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // 💡 import가 인식되도록 기대
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // 💡 import가 인식되도록 기대
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'pages/auth_gate_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // .env 파일 로드
-  await dotenv.load(fileName: ".env");
-
-  // 날짜 형식을 위한 초기화
+  await dotenv.load(fileName: ".env"); // 💡 dotenv 사용
   await initializeDateFormatting();
-
-  // Supabase 초기화
-  await Supabase.initialize(
+  await Supabase.initialize( // 💡 Supabase 사용
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );

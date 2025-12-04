@@ -2,7 +2,7 @@ class Profile {
   final String id;
   final String? email;
   final String? username;
-  final String? position;
+  final String? department;
   final String? bio;
   final String? techStack;
   final String? blogUrl;
@@ -12,7 +12,7 @@ class Profile {
     required this.id,
     this.email,
     this.username,
-    this.position,
+    this.department,
     this.bio,
     this.techStack,
     this.blogUrl,
@@ -24,7 +24,7 @@ class Profile {
       id: json['id'],
       email: json['email'],
       username: json['username'],
-      position: json['position'],
+      department: json['department'],
       bio: json['bio'],
       techStack: json['tech_stack'],
       blogUrl: json['blog_url'],
