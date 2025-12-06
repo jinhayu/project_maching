@@ -6,7 +6,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=2.15.0 <3.0.0'
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.16.0"
 
 dependencies:
   flutter:
@@ -20,6 +21,9 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.3.1
+  google_generative_ai: ^0.4.4
+  flutter_markdown: ^0.7.1
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
@@ -32,6 +36,7 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
