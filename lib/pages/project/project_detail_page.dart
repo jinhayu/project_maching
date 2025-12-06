@@ -61,13 +61,17 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
         });
       }
     } else {
-      if (mounted) setState(() => _isCheckingApplied = false);
+      if (mounted) {
+        setState(() => _isCheckingApplied = false);
+      }
     }
   }
 
   Future<void> _checkTeamMemberStatus() async {
     final isMember = await BoardService().isTeamMember(widget.project.id);
-    if (mounted) setState(() => _isTeamMember = isMember);
+    if (mounted) {
+      setState(() => _isTeamMember = isMember);
+    }
   }
 
   Future<void> _incrementView() async {
@@ -102,6 +106,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
           _isLiked = !_isLiked;
           _likeCount += _isLiked ? 1 : -1;
         });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('좋아요 처리 실패')));
       }
     }
   }
@@ -136,12 +141,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     if (_commentController.text.trim().isEmpty) return;
     try {
       await _projectService.addComment(widget.project.id, _commentController.text.trim());
-
-      // 💡 FIX: 비동기 작업 후 context 사용 전 mounted 체크
       if (!mounted) return;
-
       _commentController.clear();
-      FocusScope.of(context).unfocus(); // 키보드 내리기 (context 사용됨)
+      FocusScope.of(context).unfocus();
       _loadComments();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('댓글 등록 실패')));
@@ -157,11 +159,20 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     }
   }
 
+  // --- UI Helpers ---
+  Color _getMatchColor(double score) {
+    if (score >= 80) return Colors.green.shade600;
+    if (score >= 50) return Colors.orange.shade600;
+    return Colors.grey.shade500;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOwner = _projectService.currentUserId == widget.project.ownerId;
-    final currentUserId = _projectService.currentUserId;
+    // 💡 FIX: 사용하지 않는 로컬 변수 currentUserId 제거
     final theme = Theme.of(context);
+    final matchScore = widget.project.matchScore.toInt();
+    final matchColor = _getMatchColor(widget.project.matchScore);
 
     return Scaffold(
       appBar: AppBar(
@@ -187,7 +198,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   try {
                     await _projectService.deleteProject(widget.project.id);
                     if (context.mounted) Navigator.pop(context, true);
-                  } catch (e) { /* 에러 처리 */ }
+                  } catch (e) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('삭제 실패')));
+                  }
                 }
               },
             ),
@@ -198,7 +211,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. 헤더
+            // 1. 헤더 (제목, 좋아요, 매칭 배지)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -206,15 +219,34 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 매칭 점수 배지
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: matchColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: matchColor.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          '추천 $matchScore%',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: matchColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       Text(widget.project.title, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Text(
-                        '${DateFormat('yyyy.MM.dd').format(widget.project.createdAt)} · 조회 $_viewCount',
+                        '작성일: ${DateFormat('yyyy.MM.dd').format(widget.project.createdAt)} · 조회 $_viewCount',
                         style: TextStyle(color: Colors.grey[500], fontSize: 13),
                       ),
                     ],
                   ),
                 ),
+                // 좋아요 버튼
                 Column(
                   children: [
                     InkWell(
@@ -236,7 +268,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
             const SizedBox(height: 24),
 
-            // 2. 정보 카드
+            // 2. 정보 카드 (상태, 인원, 기술스택)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -298,7 +330,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
             const SizedBox(height: 32),
 
-            // 4. 팀 게시판 버튼
+            // 4. 팀 게시판 버튼 (팀원 전용)
             if (_isTeamMember)
               SizedBox(
                 width: double.infinity,
@@ -331,10 +363,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
             const SizedBox(height: 16),
 
+            // 댓글 리스트
             _isCommentsLoading
-                ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+                ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
                 : _comments.isEmpty
-                ? const Padding(padding: EdgeInsets.all(20), child: Center(child: Text('첫 번째 댓글을 남겨보세요.', style: TextStyle(color: Colors.grey))))
+                ? const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('첫 번째 댓글을 남겨보세요.', style: TextStyle(color: Colors.grey))))
                 : ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -342,7 +375,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final comment = _comments[index];
-                final isCommentAuthor = currentUserId == comment.userId;
+                final isCommentAuthor = _projectService.currentUserId == comment.userId;
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -388,6 +421,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
 
             const SizedBox(height: 24),
+            // 댓글 입력창
             Row(
               children: [
                 Expanded(
@@ -409,7 +443,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 80),
+            const SizedBox(height: 80), // 하단 여백
           ],
         ),
       ),
@@ -454,17 +488,15 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.grey),
-        const SizedBox(width: 12),
-        SizedBox(width: 70, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey))),
-        Expanded(child: Text(value, style: TextStyle(
-            fontSize: 15,
-            fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-            color: isHighlight ? Theme.of(context).primaryColor : Colors.black87
-        ))),
-      ],
-    );
+    return Row(children: [
+      Icon(icon, size: 20, color: Colors.grey),
+      const SizedBox(width: 12),
+      SizedBox(width: 70, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey))),
+      Expanded(child: Text(value, style: TextStyle(
+          fontSize: 15,
+          fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
+          color: isHighlight ? Theme.of(context).primaryColor : Colors.black87
+      ))),
+    ]);
   }
 }

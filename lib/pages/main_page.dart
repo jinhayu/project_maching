@@ -3,10 +3,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_page.dart';
 import 'project/project_list_page.dart';
 import 'scheduler_page.dart';
-import 'splash_page.dart'; // 💡 FIX: 경로 수정 (같은 폴더 내 파일)
+import 'splash_page.dart';
 import 'notification_page.dart';
 import '../services/notification_service.dart';
 import 'settings/settings_page.dart';
+import 'ai_chatbot_page.dart'; // AI 챗봇 페이지 import
 
 class MainPage extends StatefulWidget {
   const MainPage({Key? key}) : super(key: key);
@@ -58,52 +59,46 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _navigateToProfile() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ProfilePage()),
-    ).then((_) => _fetchUserProfile());
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())).then((_) => _fetchUserProfile());
   }
 
   void _navigateToScheduler() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SchedulerPage()),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const SchedulerPage()));
   }
 
   Future<void> _navigateToNotifications() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const NotificationPage()),
-    );
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage()));
     _checkUnreadNotifications();
   }
 
   void _navigateToSettings() {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsPage()));
+  }
+
+  // 💡 FIX: 챗봇 페이지 이동 로직 간소화 (인자 제거)
+  void _navigateToChatbot() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const SettingsPage()),
+      MaterialPageRoute(
+        builder: (context) => const AiChatbotPage(), // AiChatbotPage()에 인자 없음
+      ),
     );
   }
 
   Future<void> _signOut() async {
     try {
       await Supabase.instance.client.auth.signOut();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const SplashPage()),
+              (route) => false,
+        );
+      }
     } catch (error) {
-      // 💡 FIX: 에러 발생 시에도 mounted 체크
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('로그아웃 실패')));
       }
-      return; // 에러 발생 시 중단
     }
-
-    // 💡 FIX: 비동기 작업(signOut) 후 context 사용 전 mounted 체크
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const SplashPage()),
-          (route) => false,
-    );
   }
 
   @override
@@ -132,53 +127,33 @@ class _MainPageState extends State<MainPage> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 챗봇
+                  IconButton(
+                    icon: Icon(Icons.psychology_outlined, color: iconColor),
+                    tooltip: 'AI 코치',
+                    onPressed: _navigateToChatbot,
+                  ),
+
+                  // 1. 알림 아이콘
                   Stack(
                     children: [
-                      IconButton(
-                        icon: Icon(Icons.notifications_outlined, color: iconColor),
-                        tooltip: '알림 센터',
-                        onPressed: _navigateToNotifications,
-                      ),
+                      IconButton(icon: Icon(Icons.notifications_outlined, color: iconColor), tooltip: '알림 센터', onPressed: _navigateToNotifications),
                       if (_unreadNotifications > 0)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.white, width: 1.5),
-                            ),
-                            constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
-                          ),
-                        ),
+                        Positioned(right: 8, top: 8, child: Container(padding: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white, width: 1.5)), constraints: const BoxConstraints(minWidth: 12, minHeight: 12))),
                     ],
                   ),
 
-                  IconButton(
-                    icon: Icon(Icons.person_outline, color: iconColor),
-                    tooltip: '프로필',
-                    onPressed: _navigateToProfile,
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.calendar_today_outlined, color: iconColor),
-                    tooltip: '스케줄러',
-                    onPressed: _navigateToScheduler,
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.settings_outlined, color: iconColor),
-                    tooltip: '설정',
-                    onPressed: _navigateToSettings,
-                  ),
+                  // 2. 프로필
+                  IconButton(icon: Icon(Icons.person_outline, color: iconColor), tooltip: '프로필', onPressed: _navigateToProfile),
+                  // 3. 스케줄러
+                  IconButton(icon: Icon(Icons.calendar_today_outlined, color: iconColor), tooltip: '스케줄러', onPressed: _navigateToScheduler),
+                  // 4. 설정
+                  IconButton(icon: Icon(Icons.settings_outlined, color: iconColor), tooltip: '설정', onPressed: _navigateToSettings),
+
                   const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: _signOut,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[600],
-                    ),
-                    child: const Text('로그아웃', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+
+                  // 5. 로그아웃
+                  TextButton(onPressed: _signOut, style: TextButton.styleFrom(foregroundColor: Colors.grey[600]), child: const Text('로그아웃', style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
               ),
             ],
@@ -193,6 +168,7 @@ class _MainPageState extends State<MainPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 좌측: 프로필 카드
               Expanded(
                 flex: 1,
                 child: _SideCard(
@@ -207,35 +183,24 @@ class _MainPageState extends State<MainPage> {
                         child: Icon(Icons.person, color: Colors.white, size: 30),
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        _userName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
-                      TextButton(
-                        onPressed: _navigateToProfile,
-                        child: const Text('내 프로필 관리 >'),
-                      )
+                      TextButton(onPressed: _navigateToProfile, child: const Text('내 프로필 관리 >'))
                     ],
                   ),
                 ),
               ),
 
+              // 중앙: 프로젝트 피드
               const Expanded(
                 flex: 3,
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Card(
-                    elevation: 0,
-                    color: Colors.transparent,
-                    margin: EdgeInsets.zero,
-                    clipBehavior: Clip.antiAlias,
-                    child: ProjectListPage(),
-                  ),
+                  child: Card(elevation: 0, color: Colors.transparent, margin: EdgeInsets.zero, clipBehavior: Clip.antiAlias, child: ProjectListPage()),
                 ),
               ),
 
+              // 우측: 빠른 실행 카드
               Expanded(
                 flex: 1,
                 child: _SideCard(
@@ -245,17 +210,11 @@ class _MainPageState extends State<MainPage> {
                     children: [
                       Text('빠른 실행', style: TextStyle(color: Colors.grey[500], fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
-                      _QuickMenu(
-                          icon: Icons.calendar_month_outlined,
-                          label: '내 일정 확인',
-                          onTap: _navigateToScheduler
-                      ),
+                      _QuickMenu(icon: Icons.psychology_outlined, label: 'AI 코치에게 질문', onTap: _navigateToChatbot),
                       const SizedBox(height: 8),
-                      _QuickMenu(
-                          icon: Icons.settings_outlined,
-                          label: '계정 설정',
-                          onTap: _navigateToSettings
-                      ),
+                      _QuickMenu(icon: Icons.calendar_month_outlined, label: '내 일정 확인', onTap: _navigateToScheduler),
+                      const SizedBox(height: 8),
+                      _QuickMenu(icon: Icons.settings_outlined, label: '계정 설정', onTap: _navigateToSettings),
                     ],
                   ),
                 ),
@@ -268,9 +227,11 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
+// 사이드 카드 공통 위젯
 class _SideCard extends StatelessWidget {
   final Widget child;
-  const _SideCard({required this.child});
+  // 💡 FIX: super.key 대신 Key? key 사용
+  const _SideCard({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +255,8 @@ class _QuickMenu extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _QuickMenu({required this.icon, required this.label, required this.onTap});
+  // 💡 FIX: super.key 대신 Key? key 사용
+  const _QuickMenu({Key? key, required this.icon, required this.label, required this.onTap}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +269,7 @@ class _QuickMenu extends StatelessWidget {
           children: [
             Icon(icon, size: 20, color: const Color(0xFF2563EB)),
             const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
       ),

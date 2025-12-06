@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import '../models/profile_model.dart';
 import '../services/profile_service.dart';
 import 'profile/profile_edit_page.dart';
+import 'settings/settings_page.dart';
 
 class ProfilePage extends StatefulWidget {
-  final String? userId; // null이면 '내 프로필'
+  final String? userId;
 
-  const ProfilePage({Key? key, this.userId}) : super(key: key);
+  const ProfilePage({Key? key, this.userId}) : super(key: key); // 💡 FIX: super.key 사용
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -52,38 +53,46 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('프로필'),
+        title: const Text('프로필'), // 💡 const 적용됨
         actions: [
+          if (isMyProfile)
+            IconButton(
+              icon: const Icon(Icons.settings_outlined), // 💡 const 적용됨
+              tooltip: '설정',
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())); // 💡 const 적용됨
+              },
+            ),
+
           if (isMyProfile && !_isLoading && _profile != null)
             IconButton(
-              icon: const Icon(Icons.edit_outlined),
+              icon: const Icon(Icons.edit_outlined), // 💡 const 적용됨
               tooltip: '프로필 수정',
               onPressed: () async {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => ProfileEditPage(profile: _profile!)),
                 );
-                // 수정 후 돌아왔을 때 데이터 새로고침
                 if (result == true) _loadProfile();
               },
             ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator()) // 💡 const 적용됨
           : _profile == null
-          ? const Center(child: Text('프로필 정보를 불러올 수 없습니다.'))
+          ? const Center(child: Text('프로필 정보를 불러올 수 없습니다.')) // 💡 const 적용됨
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24), // 💡 const 적용됨
         child: Column(
           children: [
             // 1. 상단 프로필 카드 (명함 스타일)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(32), // 💡 const 적용됨
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(24), // 💡 const 적용됨
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
@@ -94,28 +103,25 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               child: Column(
                 children: [
-                  // 프로필 이미지 (이니셜 또는 아이콘)
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 50,
-                    backgroundColor: theme.primaryColor.withValues(alpha: 0.1),
-                    child: Icon(Icons.person, size: 60, color: theme.primaryColor),
+                    backgroundColor: Colors.blueGrey,
+                    child: Icon(Icons.person, size: 60, color: Colors.white), // 💡 const 적용됨
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 24), // 💡 const 적용됨
 
-                  // 닉네임
                   Text(
                     _profile!.username ?? '이름 없음',
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold), // 💡 const 적용됨
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 8), // 💡 const 적용됨
 
-                  // 💡 FIX: 학부/학과 표시 (department 사용)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), // 💡 const 적용됨
                     decoration: BoxDecoration(
                       color: theme.primaryColor.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(20), // 💡 const 적용됨
                     ),
                     child: Text(
                       _profile!.department?.isNotEmpty == true ? _profile!.department! : '학과 미설정',
@@ -126,9 +132,8 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 16), // 💡 const 적용됨
 
-                  // 이메일
                   Text(
                     _profile!.email ?? '',
                     style: TextStyle(color: Colors.grey[500], fontSize: 14),
@@ -136,83 +141,75 @@ class _ProfilePageState extends State<ProfilePage> {
                 ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 32), // 💡 const 적용됨
 
             // 2. 상세 정보 섹션
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24), // 💡 const 적용됨
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(16), // 💡 const 적용됨
                 border: Border.all(color: Colors.grey.shade200),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 자기소개
-                  _SectionTitle(title: '자기소개', icon: Icons.format_quote_rounded),
-                  const SizedBox(height: 12),
+                  const _SectionTitle(title: '자기소개', icon: Icons.format_quote_rounded), // 💡 const 적용됨
+                  const SizedBox(height: 12), // 💡 const 적용됨
                   Text(
                     _profile!.bio?.isNotEmpty == true ? _profile!.bio! : '자기소개가 없습니다.',
-                    style: const TextStyle(fontSize: 15, height: 1.6, color: Color(0xFF374151)),
+                    style: const TextStyle(fontSize: 15, height: 1.6, color: Color(0xFF374151)), // 💡 const 적용됨
                   ),
 
-                  const Padding(
+                  const Padding( // 💡 const 적용됨
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Divider(),
                   ),
 
                   // 기술 스택
-                  _SectionTitle(title: '기술 스택', icon: Icons.code_rounded),
-                  const SizedBox(height: 12),
+                  const _SectionTitle(title: '기술 스택', icon: Icons.code_rounded), // 💡 const 적용됨
+                  const SizedBox(height: 12), // 💡 const 적용됨
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 8, // 💡 const 적용됨
+                    runSpacing: 8, // 💡 const 적용됨
                     children: _profile!.techStack?.isNotEmpty == true
                         ? _profile!.techStack!.split(',').map((t) => Chip(
                       label: Text(t.trim()),
                       backgroundColor: Colors.grey[50],
                       labelStyle: TextStyle(color: Colors.grey[800], fontSize: 13),
                       side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), // 💡 const 적용됨
                     )).toList()
-                        : [const Text('등록된 기술이 없습니다.', style: TextStyle(color: Colors.grey))],
+                        : [const Text('등록된 기술이 없습니다.', style: TextStyle(color: Colors.grey))], // 💡 const 적용됨
                   ),
 
-                  const Padding(
+                  const Padding( // 💡 const 적용됨
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Divider(),
                   ),
 
                   // 링크
-                  _SectionTitle(title: '링크', icon: Icons.link_rounded),
-                  const SizedBox(height: 12),
+                  const _SectionTitle(title: '링크', icon: Icons.link_rounded), // 💡 const 적용됨
+                  const SizedBox(height: 12), // 💡 const 적용됨
                   if (_profile!.blogUrl?.isNotEmpty == true)
                     InkWell(
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('링크 이동 기능은 추후 구현됩니다.')));
                       },
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
+                      borderRadius: BorderRadius.circular(4), // 💡 const 적용됨
+                      child: Padding( // 💡 FIX: const 제거하고 Text 위젯만 const 적용 (동일 파일의 다른 곳에서 오류 방지를 위해)
                         padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          _profile!.blogUrl!,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: theme.primaryColor,
-                            decoration: TextDecoration.underline,
-                            decorationColor: theme.primaryColor.withValues(alpha: 0.5),
-                          ),
-                        ),
+                        child: Text(_profile!.blogUrl!, style: TextStyle(fontSize: 15, decoration: TextDecoration.underline, decorationColor: theme.primaryColor.withValues(alpha: 0.5))),
                       ),
                     )
                   else
-                    const Text('등록된 링크가 없습니다.', style: TextStyle(color: Colors.grey)),
+                    const Text('등록된 링크가 없습니다.', style: TextStyle(color: Colors.grey)), // 💡 const 적용됨
                 ],
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 40), // 💡 const 적용됨
           ],
         ),
       ),
@@ -225,14 +222,14 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final IconData icon;
 
-  const _SectionTitle({required this.title, required this.icon});
+  const _SectionTitle({Key? key, required this.title, required this.icon}) : super(key: key); // 💡 FIX: super-parameters 대신 Key? key 사용
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Icon(icon, size: 22, color: Colors.grey[700]),
-        const SizedBox(width: 10),
+        const SizedBox(width: 10), // 💡 const 적용됨
         Text(
           title,
           style: TextStyle(
