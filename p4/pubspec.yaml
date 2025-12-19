@@ -1,0 +1,52 @@
+name: supabase_flutter_example
+description: Demonstrates how to use supabase_flutter
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_dotenv: ^6.0.0
+  supabase_flutter: ^2.10.3
+  table_calendar: ^3.2.0
+  flutter_local_notifications: ^17.0.0
+  timezone: ^0.9.3
+  intl: ^0.20.0
+  google_fonts: ^6.1.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.1
+  google_generative_ai: ^0.4.4
+  flutter_markdown: ^0.7.1
+  http: ^1.2.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.1
+  change_app_package_name: ^1.5.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/.env
+    - assets/
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon.png" # 준비한 이미지 경로
+  min_sdk_android: 21 # 안드로이드 최소 버전
+
+flutter_native_splash:
+  color: "#FFFFFF" # 배경색 (흰색)
+  image: "assets/icon.png" # 중앙에 뜰 로고
+  android_12:
+    image: "assets/icon.png"
+    color: "#FFFFFF"
